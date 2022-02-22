@@ -4,6 +4,13 @@ import csv
 import numpy as np
 import pandas as pd
 
+# ============================================================
+#        |  X|  Y|  Z| Yaw| Pitch| Roll|
+# UE     |  a|  b|  c|   d|     e|    f|
+# Airsim |  a|  b| -c|  -d|     e|    f|
+# MIV    |  a| -b|  c|   d|    -e|    f|
+# ============================================================
+
 # Basic setting
 # ============================================================
 camera_positions = ['round']
@@ -38,7 +45,7 @@ def ue_to_miv(poses, filename='test'):
     airsim_poses = []
     for pose in poses:
         pose_tmp = [pose.name, 
-                    pose.position[0], -pose.position[1], -pose.position[2],
+                    pose.position[0], -pose.position[1], pose.position[2],
                     pose.rotation[0], -pose.rotation[1], pose.rotation[2]]
         airsim_poses.append(pose_tmp)
     df = pd.DataFrame(airsim_poses)
