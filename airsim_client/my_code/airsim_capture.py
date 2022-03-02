@@ -12,12 +12,11 @@ import json
 
 # Basic setting
 # ============================================================
-camera_positions = ['round']
-scenes = ['test']
+camera_positions = ['test0src', 'test0tar']
+scenes = ['bunny']
 CAPTURE_TEXTURE = True
-CAPTURE_DEPTH = False
+CAPTURE_DEPTH = True
 CONTINUE_FRAME = False
-
 
 # setting.json setting for airsim server
 # ============================================================
@@ -299,7 +298,7 @@ def convert_airsim_coordinate_to_MIV_coordinate(airsim_camera_pose):
 def capture_main(filename):
     # read pose traces (where cameras should pose and rotate)
     pose_traces = [] # array of Camera_pose
-    pose_traces = import_cameras_pose(f'./pose_traces/{filename}_airsim.csv')
+    pose_traces = import_cameras_pose(f'./pose_traces/{filename}/{filename}_airsim.csv')
 
     # connect to the AirSim simulator
     client = airsim.VehicleClient()
