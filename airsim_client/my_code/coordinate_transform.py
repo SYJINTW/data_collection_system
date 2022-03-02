@@ -13,8 +13,8 @@ import pandas as pd
 
 # Basic setting
 # ============================================================
-camera_positions = ['round']
-scenes = ['test']
+camera_positions = ['test0src', 'test0tar']
+scenes = ['bunny']
 # ============================================================
 
 class Camera_pose:
@@ -38,7 +38,7 @@ def ue_to_airsim(poses, filename='test'):
                     -pose.rotation[0], pose.rotation[1], pose.rotation[2]]
         airsim_poses.append(pose_tmp)
     df = pd.DataFrame(airsim_poses)
-    df.to_csv(f'./pose_traces/{filename}_airsim.csv', header=['Name', 'X', 'Y', 'Z', 'Yaw', 'Pitch', 'Roll'], index=False)
+    df.to_csv(f'./pose_traces/{filename}/{filename}_airsim.csv', header=['Name', 'X', 'Y', 'Z', 'Yaw', 'Pitch', 'Roll'], index=False)
 
 
 def ue_to_miv(poses, filename='test'):
@@ -49,8 +49,18 @@ def ue_to_miv(poses, filename='test'):
                     pose.rotation[0], -pose.rotation[1], pose.rotation[2]]
         airsim_poses.append(pose_tmp)
     df = pd.DataFrame(airsim_poses)
-    df.to_csv(f'./pose_traces/{filename}_miv.csv', header=['Name', 'X', 'Y', 'Z', 'Yaw', 'Pitch', 'Roll'], index=False)
+    df.to_csv(f'./pose_traces/{filename}/{filename}_miv.csv', header=['Name', 'X', 'Y', 'Z', 'Yaw', 'Pitch', 'Roll'], index=False)
 
+def seperate_pose(filename):
+    df = pd.read_csv(f'./pose_traces/{filename}/{filename}_miv.csv')
+    df = df.drop(columns=['Name'])
+    all_cameras = df.values
+    print(all_cameras)
+    for i in range(len(all_cameras)):
+        tmp = []
+        tmp.append(all_cameras[i])
+        df_output = pd.DataFrame(tmp)
+        df_output.to_csv(f'./pose_traces/{filename}/pose_{i}_miv.csv', header=['X', 'Y', 'Z', 'Yaw', 'Pitch', 'Roll'], index=False)
 
 def import_cameras_pose(csvfile_PATH):
     cameras_pose = []
@@ -62,13 +72,16 @@ def import_cameras_pose(csvfile_PATH):
     return cameras_pose
 
 
-
 def main():
     for camera_position in camera_positions:
         for scene in scenes:
-            poses_ue = import_cameras_pose(f'./pose_traces/{camera_position}_{scene}.csv')
-            ue_to_airsim(poses_ue, f'{camera_position}_{scene}')
-            ue_to_miv(poses_ue, f'{camera_position}_{scene}')
+            filename = f'{camera_position}_{scene}'
+            poses_ue = import_cameras_pose(f'./pose_traces/{filename}.csv')
+            if not os.path.isdir(f'./pose_traces/{filename}'):
+                os.makedirs(f'./pose_traces/{filename}')
+            ue_to_airsim(poses_ue, filename)
+            ue_to_miv(poses_ue, filename)
+            seperate_pose(filename)
 
 
 if __name__ == '__main__':
