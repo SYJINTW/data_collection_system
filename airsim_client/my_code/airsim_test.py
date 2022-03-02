@@ -166,7 +166,22 @@ def output_texture_responses_to_yuv(filename, name_responses, tex_responses):
             os.system(
                 f"powershell ffmpeg -y -i {filename}_tex.png -pix_fmt yuv420p10le {filename}_texture_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p10le.yuv"
                 )
-            
+
+def cal_surface(v1, v2, v3):
+    vector1 = v1-v2
+    vector2 = v1-v3
+    n_vector = np.cross(vector1, vector2)
+    d = -np.dot(v1,n_vector)
+    return np.append(n_vector, d)
+
+def find_point_in_surface(surface_para, point, viewport):
+    line_vector = viewport - point
+    n_vector = np.array(surface_para[0], surface_para[1], surface_para[2])
+    k = -(np.dot(point, n_vector)+surface_para[3])/np.dot(line_vector, n_vector)
+    
+
+
+
 
 def output_depth_responses_to_yuv(filename, name_responses, depth_responses, zmin, zmax):
     '''

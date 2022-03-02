@@ -61,6 +61,8 @@ def import_cameras_pose(csvfile_PATH):
             cameras_pose.append(Camera_pose(row))
     return cameras_pose
 
+
+
 def main():
     for camera_position in camera_positions:
         for scene in scenes:
