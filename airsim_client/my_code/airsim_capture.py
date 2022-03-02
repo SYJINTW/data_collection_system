@@ -15,7 +15,7 @@ import json
 camera_positions = ['test0src', 'test0tar']
 scenes = ['bunny']
 CAPTURE_TEXTURE = True
-CAPTURE_DEPTH = True
+CAPTURE_DEPTH = False
 CONTINUE_FRAME = False
 
 # setting.json setting for airsim server
