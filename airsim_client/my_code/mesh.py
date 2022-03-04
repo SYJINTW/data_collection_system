@@ -91,6 +91,50 @@ def point_distance(p1, p2, viewpoint):
     v2 = p2-viewpoint
     return np.dot(v1,v1) > np.dot(v2,v2)
 
+def triangle_change_to_csv():
+    f = open(f'./obj_source/{filename}.OBJ', encoding="utf-8")
+    header_arr = ['tri_id', 'v1_id', 'x1', 'y1', 'z1', 'v2_id', 'x2', 'y2', 'z2', 'v3_id', 'x3', 'y3', 'z3']
+    vertex_id = 1
+    vertex = []
+    triangle_id = 1
+    triangle = []
+    for line in f.readlines():
+        datas = line.split()
+        # print(datas)
+        if datas:
+            if datas[0] == 'v':
+                x = float(datas[1])
+                y = float(datas[3])
+                z = float(datas[2])
+                vertex.append([vertex_id,x,y,z])
+                vertex_id = vertex_id + 1
+            elif datas[0] == 'f':
+                v1 = int(datas[1].split('/')[0])
+                v2 = int(datas[2].split('/')[0])
+                v3 = int(datas[3].split('/')[0])
+                triangle.append([triangle_id,v1,v2,v3])
+                triangle_id = triangle_id + 1
+    f.close
+
+    tri_datas = []
+    for tri in triangle:
+        v1 = tri[1]
+        v2 = tri[2]
+        v3 = tri[3]
+        tri_datas.append([tri[0],
+                        v1,vertex[v1-1][1],vertex[v1-1][2],vertex[v1-1][3],
+                        v2,vertex[v2-1][1],vertex[v2-1][2],vertex[v2-1][3],
+                        v3,vertex[v3-1][1],vertex[v3-1][2],vertex[v3-1][3]],
+                        )
+
+
+    df = pd.DataFrame(tri_datas)
+    df.to_csv(f'./obj_source/{filename}_tri_datas.csv', header=header_arr, index=False)
+    # vertexs = np.array(vertex)
+    # triangles = np.array(triangle)
+
+    # return vertexs, triangles, len(vertex), len(triangle)
+
 
 
 def test():
@@ -150,7 +194,7 @@ def test():
     #     print('No cover')
 
 if __name__ == '__main__':
-    test()
+    triangle_change_to_csv()
 
 # if __name__ == '__main__':
 #     vertexs, triangles = get_obj_file_datas()
