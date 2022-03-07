@@ -116,6 +116,9 @@ def triangle_change_to_csv():
                 triangle_id = triangle_id + 1
     f.close
 
+    df = pd.DataFrame(vertex)
+    df.to_csv(f'./obj_source/{filename}_vertex_datas.csv', header=['id','x','y','z'], index=False)
+
     tri_datas = []
     for tri in triangle:
         v1 = tri[1]
