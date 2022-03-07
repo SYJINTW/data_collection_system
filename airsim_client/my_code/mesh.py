@@ -3,7 +3,7 @@ import pandas as pd
 import csv
 import math
 
-filename = 'test_cube'
+filename = 'bunny_mesh_merge'
 
 def get_obj_file_datas():
     f = open(f'./obj_source/{filename}.OBJ', encoding="utf-8")
@@ -93,7 +93,7 @@ def point_distance(p1, p2, viewpoint):
 
 def triangle_change_to_csv():
     f = open(f'./obj_source/{filename}.OBJ', encoding="utf-8")
-    header_arr = ['tri_id', 'v1_id', 'x1', 'y1', 'z1', 'v2_id', 'x2', 'y2', 'z2', 'v3_id', 'x3', 'y3', 'z3']
+    header_arr = ['f_id', 'v1_id', 'x1', 'y1', 'z1', 'v2_id', 'x2', 'y2', 'z2', 'v3_id', 'x3', 'y3', 'z3', 'f_nor_x', 'f_nor_y', 'f_nor_z']
     vertex_id = 1
     vertex = []
     triangle_id = 1
@@ -121,11 +121,16 @@ def triangle_change_to_csv():
         v1 = tri[1]
         v2 = tri[2]
         v3 = tri[3]
-        tri_datas.append([tri[0],
-                        v1,vertex[v1-1][1],vertex[v1-1][2],vertex[v1-1][3],
-                        v2,vertex[v2-1][1],vertex[v2-1][2],vertex[v2-1][3],
-                        v3,vertex[v3-1][1],vertex[v3-1][2],vertex[v3-1][3]],
-                        )
+        data = [tri[0],
+                v1,vertex[v1-1][1],vertex[v1-1][2],vertex[v1-1][3],
+                v2,vertex[v2-1][1],vertex[v2-1][2],vertex[v2-1][3],
+                v3,vertex[v3-1][1],vertex[v3-1][2],vertex[v3-1][3]
+                ]
+        v12 = np.array([data[6]-data[2], data[7]-data[3], data[8]-data[4]])
+        v13 = np.array([data[10]-data[2], data[11]-data[3], data[12]-data[4]])
+        v_n = np.cross(v12, v13)
+        data.extend(v_n)
+        tri_datas.append(data)
 
 
     df = pd.DataFrame(tri_datas)
@@ -178,12 +183,7 @@ def test():
                                 print(f'delete_vertex {i}')
     print(np.count_nonzero(bit_vertex))
     print(np.count_nonzero(bit_triangle))
-
-    
-                    
-
-                
-                 
+        
     # p1 = np.array([0,0,0])
     # p2 = np.array([10,0,0])
     # p3 = np.array([0,10,0])
