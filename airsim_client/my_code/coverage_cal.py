@@ -11,13 +11,16 @@ def cal_surface(v1, v2, v3):
     return np.append(n_vector, d)
 
 def vertex_in_the_normal_side(vertex_datas, v1, v2, point):
-    surface_ab_nor = np.cross(v1,v2)
-    d = np.dot(point,surface_ab_nor)
+    '''
+    vetex data = [id, x, y, z]
+    '''
+    surface_nor = np.cross(v1,v2)
+    d = np.dot(point,surface_nor.T)
     surface_check = [
-                    [1,0,0,0,0],
-                    [0,1,0,0,surface_ab_nor[0]],
-                    [0,0,1,0,surface_ab_nor[1]],
-                    [0,0,0,1,surface_ab_nor[2]],
+                    [1,0],
+                    [0,surface_nor[0]],
+                    [0,surface_nor[1]],
+                    [0,surface_nor[2]],
                     ]
     vertex_datas = vertex_datas.dot(surface_check)
     vertex_bin = vertex_datas[:,-1]
@@ -33,6 +36,37 @@ def del_face_from_vertex(face_datas, vertex_bin):
         if vertex_bin[int(face_datas[idx][1]-1)] == 0 or vertex_bin[int(face_datas[idx][5]-1)] == 0 or vertex_bin[int(face_datas[idx][9]-1)] == 0:
             face_datas = np.delete(face_datas, idx, 0)
     return face_datas
+
+def rotate_all_the_point(x,y,z,yaw,pitch,roll,vertex_datas):
+    # rotation matrix
+    # | cos(yaw)cos(pitch) -cos(yaw)sin(pitch)sin(roll)-sin(yaw)cos(roll) -cos(yaw)sin(pitch)cos(roll)+sin(yaw)sin(roll)|
+    # | sin(yaw)cos(pitch) -sin(yaw)sin(pitch)sin(roll)+cos(yaw)cos(roll) -sin(yaw)sin(pitch)cos(roll)-cos(yaw)sin(roll)|
+    # | sin(pitch)          cos(pitch)sin(roll)                            cos(pitch)sin(roll)|
+    Rz_yaw = np.array([
+        [np.cos(yaw), -np.sin(yaw), 0],
+        [np.sin(yaw),  np.cos(yaw), 0],
+        [          0,            0, 1]])
+    Ry_pitch = np.array([
+        [ np.cos(pitch), 0, np.sin(pitch)],
+        [             0, 1,             0],
+        [-np.sin(pitch), 0, np.cos(pitch)]])
+    Rx_roll = np.array([
+        [1,            0,             0],
+        [0, np.cos(roll), -np.sin(roll)],
+        [0, np.sin(roll),  np.cos(roll)]])
+    # R = RzRyRx
+    rotMat = np.round_(np.dot(Rz_yaw, np.dot(Ry_pitch, Rx_roll)), decimals=2)
+    rotMat = np.c_[[0,0,0],rotMat]
+    rotMat = np.vstack([np.array([1,0,0,0]),rotMat])
+    # print(vertex_datas.shape[0])
+    # print(vertex_datas.shape[1])
+
+    vertex_datas_rotate = np.dot(rotMat, vertex_datas.T).T
+    # print(vertex_datas_rotate.shape[0])
+    # print(vertex_datas_rotate.shape[1])
+    return vertex_datas_rotate
+
+
 
 
 def main():
@@ -60,47 +94,17 @@ def main():
     viewpoint_b = np.array([1,1,1.8])
     viewpoint_c = np.array([1,1,-1.8])
     viewpoint_d = np.array([1,-1,-1.8])
-
-    # rotation matrix
-    # | cos(yaw)cos(pitch) -cos(yaw)sin(pitch)sin(roll)-sin(yaw)cos(roll) -cos(yaw)sin(pitch)cos(roll)+sin(yaw)sin(roll)|
-    # | sin(yaw)cos(pitch) -sin(yaw)sin(pitch)sin(roll)+cos(yaw)cos(roll) -sin(yaw)sin(pitch)cos(roll)-cos(yaw)sin(roll)|
-    # | sin(pitch)          cos(pitch)sin(roll)                            cos(pitch)sin(roll)|
-    Rz_yaw = np.array([
-        [np.cos(yaw), -np.sin(yaw), 0],
-        [np.sin(yaw),  np.cos(yaw), 0],
-        [          0,            0, 1]])
-    Ry_pitch = np.array([
-        [ np.cos(pitch), 0, np.sin(pitch)],
-        [             0, 1,             0],
-        [-np.sin(pitch), 0, np.cos(pitch)]])
-    Rx_roll = np.array([
-        [1,            0,             0],
-        [0, np.cos(roll), -np.sin(roll)],
-        [0, np.sin(roll),  np.cos(roll)]])
-    # R = RzRyRx
-    rotMat = np.round_(np.dot(Rz_yaw, np.dot(Ry_pitch, Rx_roll)), decimals=2)
-
-    viewpoint_center = viewport_pos
-    viewpoint_mid = rotMat.dot(viewpoint_mid.T)+viewport_pos
-    viewpoint_a = rotMat.dot(viewpoint_a.T)+viewport_pos
-    viewpoint_b = rotMat.dot(viewpoint_b.T)+viewport_pos
-    viewpoint_c = rotMat.dot(viewpoint_c.T)+viewport_pos
-    viewpoint_d = rotMat.dot(viewpoint_d.T)+viewport_pos
-
-    print(viewpoint_center)
-    print(viewpoint_mid-viewpoint_center)
-    print(viewpoint_a)
-    print(viewpoint_b)
-    print(viewpoint_c)
-    print(viewpoint_d)
-
-
+    
     tri_datas = pd.read_csv(f'./obj_source/{filename}_tri_datas.csv').to_numpy()
     vertex_datas = pd.read_csv(f'./obj_source/{filename}_vertex_datas.csv').to_numpy()
 
+    rotate_all_the_point(x,y,z,yaw,pitch,roll,vertex_datas)
+
+    # create a binary list to store vertex usage
     vertex_bin = np.ones(vertex_datas.shape[0])
+    
     # 1
-    # delete outside(+)
+    # delete outside(-)
     vertex_bin = np.logical_and(vertex_in_the_normal_side(vertex_datas, viewpoint_a-viewpoint_center, viewpoint_b-viewpoint_center, viewport_pos),vertex_bin)
     print(vertex_bin)
     print(np.count_nonzero(vertex_bin))
@@ -191,3 +195,8 @@ def main():
 
 if __name__ == '__main__':
     main()
+    # A = np.array([[1,2,3],[4,5,6]])
+    # print(A)
+    # print(A.T)
+    # print(A.T.T)
+    

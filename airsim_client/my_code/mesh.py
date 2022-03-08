@@ -118,26 +118,28 @@ def triangle_change_to_csv():
 
     df = pd.DataFrame(vertex)
     df.to_csv(f'./obj_source/{filename}_vertex_datas.csv', header=['id','x','y','z'], index=False)
+    df = pd.DataFrame(triangle)
+    df.to_csv(f'./obj_source/{filename}_tri_datas.csv', header=['id','v1','v2','v3'], index=False)
 
-    tri_datas = []
-    for tri in triangle:
-        v1 = tri[1]
-        v2 = tri[2]
-        v3 = tri[3]
-        data = [tri[0],
-                v1,vertex[v1-1][1],vertex[v1-1][2],vertex[v1-1][3],
-                v2,vertex[v2-1][1],vertex[v2-1][2],vertex[v2-1][3],
-                v3,vertex[v3-1][1],vertex[v3-1][2],vertex[v3-1][3]
-                ]
-        v12 = np.array([data[6]-data[2], data[7]-data[3], data[8]-data[4]])
-        v13 = np.array([data[10]-data[2], data[11]-data[3], data[12]-data[4]])
-        v_n = np.cross(v12, v13)
-        data.extend(v_n)
-        tri_datas.append(data)
+    # tri_datas = []
+    # for tri in triangle:
+    #     v1 = tri[1]
+    #     v2 = tri[2]
+    #     v3 = tri[3]
+    #     data = [tri[0],
+    #             v1,vertex[v1-1][1],vertex[v1-1][2],vertex[v1-1][3],
+    #             v2,vertex[v2-1][1],vertex[v2-1][2],vertex[v2-1][3],
+    #             v3,vertex[v3-1][1],vertex[v3-1][2],vertex[v3-1][3]
+    #             ]
+    #     v12 = np.array([data[6]-data[2], data[7]-data[3], data[8]-data[4]])
+    #     v13 = np.array([data[10]-data[2], data[11]-data[3], data[12]-data[4]])
+    #     v_n = np.cross(v12, v13)
+    #     data.extend(v_n)
+    #     tri_datas.append(data)
 
-
-    df = pd.DataFrame(tri_datas)
-    df.to_csv(f'./obj_source/{filename}_tri_datas.csv', header=header_arr, index=False)
+    # df = pd.DataFrame(tri_datas)
+    # df.to_csv(f'./obj_source/{filename}_tri_datas.csv', header=header_arr, index=False)
+    
     # vertexs = np.array(vertex)
     # triangles = np.array(triangle)
 
