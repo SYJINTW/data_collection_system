@@ -1,3 +1,4 @@
+from tabnanny import check
 import pandas as pd
 import numpy as np
 import math
@@ -5,96 +6,144 @@ from scipy.spatial.transform import Rotation as R
 
 filename = 'bunny_mesh_merge'
 
-def vertex_in_the_normal_side(vertex_datas, v1, v2, point):
+def vertex_in_the_pos_normal_side(vertex_datas, v1, v2, surface_point):
     '''
     vetex data = [id, x, y, z]
+    v1 = [x,y,z]
+    v2 = [x,y,z]
+    surface_point = [x,y,z]
     '''
+    # print(vertex_datas)
     surface_nor = np.cross(v1,v2)
-    d = np.dot(point,surface_nor.T)
+    d = np.dot(surface_point,surface_nor.T)
     surface_check = [
                     [1,0],
                     [0,surface_nor[0]],
                     [0,surface_nor[1]],
                     [0,surface_nor[2]],
                     ]
-    vertex_datas = vertex_datas.dot(surface_check)
-    vertex_bin = vertex_datas[:,-1]
-    vertex_bin = np.where(vertex_bin>=d,True,vertex_bin)
-    vertex_bin = np.where(vertex_bin<d,False,vertex_bin)
-    # print(vertex_bin.shape[0])
-    vertex_bin = np.append([False],vertex_bin)
-    # print(vertex_bin.shape[0])
+    vertex_d = np.dot(vertex_datas, surface_check)
+    vertex_d[:,1] = vertex_d[:,1] - d
+    vertex_bin = vertex_d[:,1]
+    vertex_bin = np.where(vertex_bin>=0, 1, vertex_bin)
+    vertex_bin = np.where(vertex_bin<0, 0, vertex_bin)
     return vertex_bin
     
+def del_tri(tri_datas,vertex_bin):
+    tri_datas_shape = tri_datas[:,1:] # delete id
+    a = tri_datas_shape.shape[0]
+    b = tri_datas_shape.shape[1]
+    # print(a,b)
+    tri_datas_shape = tri_datas_shape.flatten()
+    # print(tri_datas_shape)
+    tri_datas_shape[:] = tri_datas_shape[:] - 1
+    # print(tri_datas_shape)
+    tri_vertex_bin = vertex_bin[tri_datas_shape]
+    # print(tri_vertex_bin)
+    tri_vertex_bin = tri_vertex_bin.reshape(a,b)
+    # print(tri_vertex_bin)
+    tri_bin = np.logical_and(tri_vertex_bin[:,0],tri_vertex_bin[:,1])
+    tri_bin = np.logical_and(tri_vertex_bin[:,2],tri_bin)
+    # print(tri_bin)
+    # print(np.count_nonzero(tri_bin))
+    return tri_bin
 
-def del_face_from_vertex(face_datas, vertex_bin):
-    for idx in range(face_datas.shape[0]-1,-1,-1):
-        if vertex_bin[int(face_datas[idx][1]-1)] == 0 or vertex_bin[int(face_datas[idx][5]-1)] == 0 or vertex_bin[int(face_datas[idx][9]-1)] == 0:
-            face_datas = np.delete(face_datas, idx, 0)
-    return face_datas
 
 def rotate_all_the_point(x,y,z,yaw,pitch,roll,vertex_datas):
-    # rotation matrix
-    # | cos(yaw)cos(pitch) -cos(yaw)sin(pitch)sin(roll)-sin(yaw)cos(roll) -cos(yaw)sin(pitch)cos(roll)+sin(yaw)sin(roll)|
-    # | sin(yaw)cos(pitch) -sin(yaw)sin(pitch)sin(roll)+cos(yaw)cos(roll) -sin(yaw)sin(pitch)cos(roll)-cos(yaw)sin(roll)|
-    # | sin(pitch)          cos(pitch)sin(roll)                            cos(pitch)sin(roll)|
-    
-    
-    Rz_yaw = np.array([
-        [np.cos(yaw), -np.sin(yaw), 0],
-        [np.sin(yaw),  np.cos(yaw), 0],
-        [          0,            0, 1]])
-    Ry_pitch = np.array([
-        [ np.cos(pitch), 0, np.sin(pitch)],
-        [             0, 1,             0],
-        [-np.sin(pitch), 0, np.cos(pitch)]])
-    Rx_roll = np.array([
-        [1,            0,             0],
-        [0, np.cos(roll), -np.sin(roll)],
-        [0, np.sin(roll),  np.cos(roll)]])
-    # R = RzRyRx
-    rotMat = np.round_(np.dot(Rz_yaw, np.dot(Ry_pitch, Rx_roll)), decimals=2)
-    rotMat = np.c_[[0,0,0],rotMat]
-    rotMat = np.vstack([np.array([1,0,0,0]),rotMat])
-    # print(vertex_datas.shape[0])
-    # print(vertex_datas.shape[1])
+    '''
+    vertex_data = [id,x,y,z]
+    '''
+    vertex_datas[:,1] = vertex_datas[:,1] - x
+    vertex_datas[:,2] = vertex_datas[:,2] - y
+    vertex_datas[:,3] = vertex_datas[:,3] - z
 
-    vertex_datas_rotate = np.dot(rotMat, vertex_datas.T).T
-    # print(vertex_datas_rotate.shape[0])
-    # print(vertex_datas_rotate.shape[1])
+    r = R.from_euler('zyx', [yaw, pitch, roll], degrees=True)
+    rotation_mat = r.as_matrix()
+    rotation_mat = np.c_[[0,0,0], rotation_mat]
+    # print(rotation_mat)
+    rotation_mat = np.vstack([[1,0,0,0],rotation_mat])
+    # print(rotation_mat)
+    rotation_mat_inv = np.linalg.inv(rotation_mat)
+    # print(rotation_mat_inv)
+    vertex_datas_rotate = np.dot(rotation_mat_inv, vertex_datas.T).T
+    
     return vertex_datas_rotate
 
-def find_point_in_triangle(vertex_datas, v1, v2, v3, viewpoint, point):
+# def find_neg_normal(tri_datas,vertex_datas,tri_bin,vertex_bin):
+#     tri_vertex_datas = tri_datas[:,1:]
+#     for idx in range(tri_datas.shape[0]):
+#         vertex_datas[tri_datas[idx][1]][1]
+
+
+
+def check_vertex_and_tri(tri_datas,vertex_datas,tri_bin,vertex_bin):
     '''
-    vetex_data = [id, x, y, z]
-    v1 = [x,y,z]
-    v2 = [x,y,z]
-    v3 = [x,y,z]
-    point = [x, y, z]
+    tri_data = [id,v1,v2,v3]
+    vertex_data = [id,x,y,z]
     '''
-        
+    for idx in range(tri_datas.shape[0]):
+        if tri_bin[idx] == 1:
+            tri_data = tri_datas[idx]
+            v1 = vertex_datas[tri_data[1]-1][1:]
+            v2 = vertex_datas[tri_data[2]-1][1:]
+            v3 = vertex_datas[tri_data[3]-1][1:]
 
+            # three face
+            surface_nor = np.cross(v1,v2)
+            d = np.dot([0,0,0],surface_nor.T)
+            surface_check = [
+                    [1,0],
+                    [0,surface_nor[0]],
+                    [0,surface_nor[1]],
+                    [0,surface_nor[2]],
+                    ]
+            vertex_d = np.dot(vertex_datas, surface_check)
+            vertex_d[:,1] = vertex_d[:,1] - d
+            vertex_bin_1 = vertex_d[:,1] - d
+            vertex_bin_1 = np.where(vertex_bin_1>=0, 1, vertex_bin_1)
+            vertex_bin_1 = np.where(vertex_bin_1<0, 0, vertex_bin_1)
+            
+            # in front of the surface 
+            v21 = v2 - v1
+            v31 = v3 - v1
+            surface_nor = np.cross(v21,v31)
+            d = np.dot(v1,surface_nor.T)
+            surface_check = [
+                    [1,0],
+                    [0,surface_nor[0]],
+                    [0,surface_nor[1]],
+                    [0,surface_nor[2]],
+                    ]
+            vertex_d = np.dot(vertex_datas, surface_check)
+            vertex_d[:,1] = vertex_d[:,1] - d
+            vertex_bin_2 = vertex_d[:,1]
+            vertex_bin_2 = np.where(vertex_bin_2>=0, 1, vertex_bin_2)
+            vertex_bin_2 = np.where(vertex_bin_2<0, 0, vertex_bin_2)
 
-def main():
-    x = -200
-    y = 0
-    z = 0
-    yaw = 0
-    pitch = 0
-    roll = 0
+            vertex_bin_12 = np.logical_or(vertex_bin_1, vertex_bin_2)
+            vertex_bin = np.logical_and(vertex_bin_12, vertex_bin)
+            print('vertex_bin: ', vertex_bin)
+            print(np.count_nonzero(vertex_bin))
+            tri_bin = del_tri(tri_datas,vertex_bin)*tri_bin
+            print('tri_bin: ', tri_bin)
+            print(np.count_nonzero(tri_bin))
+    return vertex_bin, tri_bin
+            
 
-    viewport_pos = np.array([x,y,z])
-    yaw = np.radians(yaw)
-    pitch = np.radians(pitch)
-    roll = np.radians(roll)
-
-    # viewport = [x,y,z,yaw,pitch,roll]
+def main(_x,_y,_z,_yaw,_pitch,_roll):
+    x = _x # cm
+    y = _y # cm
+    z = _z # cm
+    yaw = _yaw # degree
+    pitch = _pitch # degree
+    roll = _roll # degree
 
     # mid vector [1,0,0]
     # a [1,-1,1.8]
     # b [1,1,1.8]
     # c [1,1,-1.8]
     # d [1,-1,-1.8]
+    viewpoint = np.array([0,0,0])
     viewpoint_mid = np.array([1,0,0])
     viewpoint_a = np.array([1,-1,1.8])
     viewpoint_b = np.array([1,1,1.8])
@@ -107,78 +156,66 @@ def main():
     # vertex_data = [id,x,y,z]
     vertex_datas = pd.read_csv(f'./obj_source/{filename}_vertex_datas.csv').to_numpy()
 
-    # change all point into viewpoint cooridinate
-    rotate_all_the_point(x,y,z,yaw,pitch,roll,vertex_datas)
-
     # create a binary list to store vertex usage
-    vertex_bin = np.ones(vertex_datas.shape[0]+1)
-    tri_bin = np.ones(tri_datas.shape[0]+1)
-    vertex_bin[0] = 0
-    tri_bin[0] = 0
-    
+    vertex_bin = np.ones(vertex_datas.shape[0])
+    tri_bin = np.ones(tri_datas.shape[0])
+
     # 1
-    # delete outside(-)
-    vertex_bin = np.logical_and(vertex_in_the_normal_side(vertex_datas, viewpoint_a, viewpoint_b, [0,0,0]), vertex_bin)
-    print(vertex_bin)
-    print(np.count_nonzero(vertex_bin))
-    vertex_bin = np.logical_and(vertex_in_the_normal_side(vertex_datas, viewpoint_b, viewpoint_c, [0,0,0]), vertex_bin)
-    print(vertex_bin)
-    print(np.count_nonzero(vertex_bin))
-    vertex_bin = np.logical_and(vertex_in_the_normal_side(vertex_datas, viewpoint_c, viewpoint_d, [0,0,0]), vertex_bin)
-    print(vertex_bin)
-    print(np.count_nonzero(vertex_bin))
-    vertex_bin = np.logical_and(vertex_in_the_normal_side(vertex_datas, viewpoint_d, viewpoint_a, [0,0,0]), vertex_bin)
-    print(vertex_bin)
-    print(np.count_nonzero(vertex_bin))
+    # change all point into viewpoint cooridinate
+    vertex_datas = rotate_all_the_point(x,y,z,yaw,pitch,roll,vertex_datas)
     
     # 2
-    # change tri binary array
-    for tri_data in tri_datas:
-        for i in range(1,4):
-            if vertex_bin[tri_data[i]] == False:
-                tri_bin[tri_data[0]] = False
-    print("Numbers of triangle: ", tri_bin.shape[0])
-    print("Numbers of TRUE triangle: ", np.count_nonzero(tri_bin))
-
-
+    # delete outside(-)
+    vertex_bin = vertex_in_the_pos_normal_side(vertex_datas, viewpoint_a, viewpoint_b, viewpoint)*vertex_bin
+    print(vertex_bin)
+    print(np.count_nonzero(vertex_bin))
+    vertex_bin = vertex_in_the_pos_normal_side(vertex_datas, viewpoint_b, viewpoint_c, viewpoint)*vertex_bin
+    print(vertex_bin)
+    print(np.count_nonzero(vertex_bin))
+    vertex_bin = vertex_in_the_pos_normal_side(vertex_datas, viewpoint_c, viewpoint_d, viewpoint)*vertex_bin
+    print(vertex_bin)
+    print(np.count_nonzero(vertex_bin))
+    vertex_bin = vertex_in_the_pos_normal_side(vertex_datas, viewpoint_d, viewpoint_a, viewpoint)*vertex_bin
+    print(vertex_bin)
+    print(np.count_nonzero(vertex_bin))
     
+    # 3
+    # change tri binary array
+    tri_bin = del_tri(tri_datas,vertex_bin)*tri_bin
+    print('tri_bin: ', tri_bin)
+    print(np.count_nonzero(tri_bin))
 
-
-
-
-    # # 3
-    # for tri_data in tri_datas:
-    #     if tri_bin[tri_data[0]] == True:
-    #         v1 = np.array(vertex_datas[tri_data[1]-1][1:])
-    #         v2 = np.array(vertex_datas[tri_data[2]-1][1:])
-    #         v3 = np.array(vertex_datas[tri_data[3]-1][1:])
-    #         vertex_bin = np.logical_and(vertex_in_the_normal_side(vertex_datas, v2, v1, [0,0,0]), vertex_bin)
-    #         vertex_bin = np.logical_and(vertex_in_the_normal_side(vertex_datas, v3, v2, [0,0,0]), vertex_bin)
-    #         vertex_bin = np.logical_and(vertex_in_the_normal_side(vertex_datas, v1, v3, [0,0,0]), vertex_bin)
-
-    # # 4
-    # # change tri binary array
-    # for tri_data in tri_datas:
-    #     for i in range(1,4):
-    #         if vertex_bin[tri_data[i]] == False:
-    #             tri_bin[tri_data[0]] = False
-    # print("Numbers of triangle: ", tri_bin.shape[0])
-    # print("Numbers of TRUE triangle: ", np.count_nonzero(tri_bin))
+    # 4
+    # delete normal dot positive
+    # find_neg_normal(tri_datas,vertex_datas,tri_bin,vertex_bin)
 
     # 5
+    vertex_bin, tri_bin = check_vertex_and_tri(tri_datas, vertex_datas, tri_bin, vertex_bin)
+    print(np.count_nonzero(vertex_bin))
+    print(np.count_nonzero(tri_bin))
+
+    df = pd.DataFrame(tri_bin)
+    df_v = pd.DataFrame(vertex_bin)
+    df.to_csv(f'./obj_source/test.csv', index=False)
+    df_v.to_csv(f'./obj_source/test_v.csv', index=False)
     
-
-    # df = pd.DataFrame(tri_datas)
-    # df_v = pd.DataFrame(vertex_datas)
-    # df.to_csv(f'./obj_source/test.csv', header=['f_id', 'v1_id', 'x1', 'y1', 'z1', 'v2_id', 'x2', 'y2', 'z2', 'v3_id', 'x3', 'y3', 'z3', 'nor_check'], index=False)
-    # df_v.to_csv(f'./obj_source/test_v.csv', header=['id', 'x', 'y', 'z', 'check'], index=False)
-
+    return vertex_bin, tri_bin
 
 
 if __name__ == '__main__':
-    main()
-    # A = np.array([[1,2,3],[4,5,6]])
-    # print(A)
-    # print(A.T)
-    # print(A.T.T)
+    v1, t1 = main(-200,0,0,0,0,0)
+    v2, t2 = main(-200.0,0.0,0.0,0.0,-0.0,90)
+    
+    print(np.count_nonzero(t1))
+    print(np.count_nonzero(np.logical_and(t1,t2)))
+    
+    t = np.count_nonzero(np.logical_and(t1,t2)) / np.count_nonzero(t1)
+    print(t)
+    # a = np.array([1,2,3,4,5])
+    # b = np.array([1,2,1,2,1])
+    # print(a[b])
+
+
+    
+    
     
