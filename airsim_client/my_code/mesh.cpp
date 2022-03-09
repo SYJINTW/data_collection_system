@@ -1,30 +1,47 @@
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 #include <iostream>
-# include <vector>
-using namespace std;
 
-class CSV_reader
+
+void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+
+int main()
 {
+    glfwInit();
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
-};
+    GLFWwindow* window = glfwCreateWindow(800, 600, "LearnOpenGL", NULL, NULL);
+    if (window == NULL)
+    {
+        std::cout << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        return -1;
+    }
+    glfwMakeContextCurrent(window);
 
-class Vertex
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    {
+        std::cout << "Failed to initialize GLAD" << std::endl;
+        return -1;
+    }
+
+    glViewport(0, 0, 800, 600);
+
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
+    while(!glfwWindowShouldClose(window))
+    {
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+    glfwTerminate();
+    return 0;
+}
+
+void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
-    public:
-    int id;
-    float x;
-    float y;
-    float z;
-    Vertex(int _id, float _x, float _y, float _z) :
-            id(_id), x(_x), y(_y), z(_z){}
-    
-};
-
-class Face
-{
-
-};
-
-
-int main(){
-
+    glViewport(0, 0, width, height);
 }
