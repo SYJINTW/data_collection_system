@@ -13,7 +13,7 @@ import pandas as pd
 
 # Basic setting
 # ============================================================
-camera_positions = ['H1data0']
+camera_positions = ['round']
 scenes = ['bunny']
 # ============================================================
 
