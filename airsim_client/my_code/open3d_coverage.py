@@ -6,16 +6,28 @@ import numpy as np
 import os
 from scipy.spatial.transform import Rotation as R
 
-FOV = 90
-WIDTH = 1280
-HEIGHT = 720
-MAX_NUM_TRI = 8754
+# ============================================================
+
+FOV = 90 # degree
+WIDTH = 1280 # pixel
+HEIGHT = 720 # pixel
+OBJ_PATH = './obj_source/bunny_mesh_merge.OBJ'
+MAX_NUM_TRI = 8754 # get from obj file
+
+# ============================================================
+
+sv_camera_positions = ['round']
+sv_scenes = ['bunny']
+tv_camera_positions = ['round']
+tv_scenes = ['bunny']
+
+# ============================================================
 
 def get_primitive_ids(mesh_obj_path, _eye, _center, _up, filename, pose_filename):
     mesh = o3d.io.read_triangle_mesh(mesh_obj_path)
     # print(mesh)
     # print(np.asarray(mesh.vertices))
-    # print(np.asarray(mesh.triangles))
+    print(np.asarray(mesh.triangles))
     # print(type(mesh))
     mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
     scene = o3d.t.geometry.RaycastingScene()
@@ -83,29 +95,35 @@ def euler_to_camera(x,y,z,yaw,pitch,roll):
     print()
 
     return eye, center, up
+
+
+def get_coverage_data(mesh_obj_path, filename):
+    if not os.path.isdir('./coverage_data'):
+        os.system('mkdir ./coverage_data')
+    if not os.path.isdir(f'./coverage_data/{filename}'):
+        os.system(f'mkdir ./coverage_data/{filename}')
     
 def main():
 
-    mesh_obj_path = './obj_source/bunny_mesh_merge.OBJ'
+    mesh_obj_path = OBJ_PATH
     
-
-    sv_camera_positions = ['round']
-    sv_scenes = ['bunny']
-    tv_camera_positions = ['round']
-    tv_scenes = ['bunny']
-
-    # os.system('mkdir ./coverage_data')
-    # # predo
-    # for tv_camera_position in tv_camera_positions:
-    #     for tv_scene in tv_scenes:
-    #         tv_filename = f'{tv_camera_position}_{tv_scene}'
-    #         os.system(f'mkdir ./coverage_data/{tv_filename}')
-    #         tv_poses = pd.read_csv(f'./pose_traces/{tv_filename}/{tv_filename}_airsim.csv').to_numpy()
-    #         for tv_pose in tv_poses:
-    #             tv_pose_filename = f'{tv_filename}_{tv_pose[0]}'
-    #             print(tv_pose[1]*100,tv_pose[2]*100,tv_pose[3]*100-500,tv_pose[4],tv_pose[5],tv_pose[6])
-    #             eye, center, up = euler_to_camera(tv_pose[1]*100,tv_pose[2]*100,tv_pose[3]*100-500,tv_pose[4],tv_pose[5],tv_pose[6])
-    #             get_primitive_ids(mesh_obj_path, eye, center, up, tv_filename, tv_pose_filename)
+    if not os.path.isdir('./coverage_data'):
+        os.system('mkdir ./coverage_data')
+    
+    # pre do
+    for tv_camera_position in tv_camera_positions:
+        for tv_scene in tv_scenes:
+            tv_filename = f'{tv_camera_position}_{tv_scene}'
+            get_coverage_data(OBJ_PATH, tv_filename)
+            
+            # os.system(f'mkdir ./coverage_data/{tv_filename}')
+            # read airsim pose_trace
+            tv_poses = pd.read_csv(f'./pose_traces/{tv_filename}/{tv_filename}_airsim.csv').to_numpy()
+            for tv_pose in tv_poses:
+                tv_pose_filename = f'{tv_filename}_{tv_pose[0]}'
+                print(tv_pose[1]*100,tv_pose[2]*100,tv_pose[3]*100-500,tv_pose[4],tv_pose[5],tv_pose[6])
+                eye, center, up = euler_to_camera(tv_pose[1]*100,tv_pose[2]*100,tv_pose[3]*100-500,tv_pose[4],tv_pose[5],tv_pose[6])
+                get_primitive_ids(mesh_obj_path, eye, center, up, tv_filename, tv_pose_filename)
     
     # for sv_camera_position in sv_camera_positions:
     #     for sv_scene in sv_scenes:
@@ -118,24 +136,24 @@ def main():
     #             get_primitive_ids(mesh_obj_path, eye, center, up, sv_filename, sv_pose_filename)
     
     
-    for tv_camera_position in tv_camera_positions:
-        for tv_scene in tv_scenes:
-            tv_filename = f'{tv_camera_position}_{tv_scene}'
-            tv_poses = pd.read_csv(f'./pose_traces/{tv_filename}.csv').to_numpy()
-            coverages = []
-            for tv_pose in tv_poses:
-                base_view = pd.read_csv(f'./coverage_data/{tv_filename}/{tv_filename}_{tv_pose[0]}_primitive_ids.csv').to_numpy()
+    # for tv_camera_position in tv_camera_positions:
+    #     for tv_scene in tv_scenes:
+    #         tv_filename = f'{tv_camera_position}_{tv_scene}'
+    #         tv_poses = pd.read_csv(f'./pose_traces/{tv_filename}.csv').to_numpy()
+    #         coverages = []
+    #         for tv_pose in tv_poses:
+    #             base_view = pd.read_csv(f'./coverage_data/{tv_filename}/{tv_filename}_{tv_pose[0]}_primitive_ids.csv').to_numpy()
                 
-                for sv_camera_position in sv_camera_positions:
-                    for sv_scene in sv_scenes:
-                        sv_filename = f'{sv_camera_position}_{sv_scene}'
-                        sv_poses = pd.read_csv(f'./pose_traces/{sv_filename}.csv').to_numpy()
-                        for sv_pose in sv_poses:
-                            src_view = pd.read_csv(f'./coverage_data/{sv_filename}/{sv_filename}_{sv_pose[0]}_primitive_ids.csv').to_numpy()
-                            coverage = cal_coverage_by_np(base_view, src_view)
-                            coverages.append([tv_pose[0],sv_pose[0],coverage])
-            df = pd.DataFrame(coverages)
-            df.to_csv(f'./{tv_filename}_to_{sv_filename}.csv', header=['tv','sv','coverage'],index=False)
+    #             for sv_camera_position in sv_camera_positions:
+    #                 for sv_scene in sv_scenes:
+    #                     sv_filename = f'{sv_camera_position}_{sv_scene}'
+    #                     sv_poses = pd.read_csv(f'./pose_traces/{sv_filename}.csv').to_numpy()
+    #                     for sv_pose in sv_poses:
+    #                         src_view = pd.read_csv(f'./coverage_data/{sv_filename}/{sv_filename}_{sv_pose[0]}_primitive_ids.csv').to_numpy()
+    #                         coverage = cal_coverage_by_np(base_view, src_view)
+    #                         coverages.append([tv_pose[0],sv_pose[0],coverage])
+    #         df = pd.DataFrame(coverages)
+    #         df.to_csv(f'./{tv_filename}_to_{sv_filename}.csv', header=['tv','sv','coverage'],index=False)
             
 if __name__ == '__main__':
     main()
