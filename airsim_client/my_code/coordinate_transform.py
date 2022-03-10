@@ -55,7 +55,7 @@ def seperate_pose(filename):
     df = pd.read_csv(f'./pose_traces/{filename}/{filename}_miv.csv')
     df = df.drop(columns=['Name'])
     all_cameras = df.values
-    print(all_cameras)
+    # print(all_cameras)
     for i in range(len(all_cameras)):
         tmp = []
         tmp.append(all_cameras[i])
@@ -71,17 +71,26 @@ def import_cameras_pose(csvfile_PATH):
             cameras_pose.append(Camera_pose(row))
     return cameras_pose
 
+def change_main(filename):
+    poses_ue = import_cameras_pose(f'./pose_traces/{filename}.csv')
+    if not os.path.isdir(f'./pose_traces/{filename}'):
+        os.makedirs(f'./pose_traces/{filename}')
+    ue_to_airsim(poses_ue, filename)
+    ue_to_miv(poses_ue, filename)
+    seperate_pose(filename)
+
 
 def main():
     for camera_position in camera_positions:
         for scene in scenes:
             filename = f'{camera_position}_{scene}'
-            poses_ue = import_cameras_pose(f'./pose_traces/{filename}.csv')
-            if not os.path.isdir(f'./pose_traces/{filename}'):
-                os.makedirs(f'./pose_traces/{filename}')
-            ue_to_airsim(poses_ue, filename)
-            ue_to_miv(poses_ue, filename)
-            seperate_pose(filename)
+            change_main(filename)
+            # poses_ue = import_cameras_pose(f'./pose_traces/{filename}.csv')
+            # if not os.path.isdir(f'./pose_traces/{filename}'):
+            #     os.makedirs(f'./pose_traces/{filename}')
+            # ue_to_airsim(poses_ue, filename)
+            # ue_to_miv(poses_ue, filename)
+            # seperate_pose(filename)
 
 
 if __name__ == '__main__':
