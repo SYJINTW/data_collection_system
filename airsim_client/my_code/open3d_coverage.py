@@ -8,7 +8,6 @@ import os
 from scipy.spatial.transform import Rotation as R
 from itertools import combinations
 import time
-
 from tomlkit import string
 
 import coordinate_transform
@@ -23,7 +22,7 @@ COVERAGE_TABLE = True
 FOV = 90 # degree
 WIDTH = 1280 # pixel
 HEIGHT = 720 # pixel
-PIXEL = WIDTH*HEIGHT
+PIXEL = WIDTH * HEIGHT
 OBJ_PATH = './obj_source/bunny_mesh_merge.OBJ'
 MAX_NUM_TRI = 8754 # get from obj file
 VIEW_START_POINT = [0,0,5] # meters
@@ -38,10 +37,6 @@ sv_filename = 'sv_bunny'
 
 def get_primitive_ids(mesh_obj_path, _eye, _center, _up, filename, pose_filename):
     mesh = o3d.io.read_triangle_mesh(mesh_obj_path)
-    # print(mesh)
-    # print(np.asarray(mesh.vertices))
-    # print(np.asarray(mesh.triangles))
-    # print(type(mesh))
     mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
     scene = o3d.t.geometry.RaycastingScene()
     scene.add_triangles(mesh)
@@ -128,7 +123,7 @@ def get_coverage_data(mesh_obj_path, filename):
         name = f'{filename}_{idx}'
         eye, center, up = euler_to_camera(airsim_pose[1]*100-VIEW_START_POINT[0]*100,
                                             airsim_pose[2]*100-VIEW_START_POINT[1]*100,
-                                            airsim_pose[3]*100-+VIEW_START_POINT[2]*100,
+                                            airsim_pose[3]*100-VIEW_START_POINT[2]*100,
                                             airsim_pose[4],
                                             airsim_pose[5],
                                             airsim_pose[6]
@@ -161,28 +156,28 @@ def coverage_table_generator(tv_filename, sv_filename, orders):
     sv_num = sv_poses.shape[0]
 
     coverages = []
-    for order in range(1,orders+1):
-        for tv_idx in range(tv_num):
-            tv_bin = pd.read_csv(f'./coverage_data/{tv_filename}/{tv_filename}_{tv_idx}_bin.csv').to_numpy().flatten()
+    coverages_dict_list = []
+    # for order in range(1,orders+1):
+    for tv_idx in range(tv_num):
+        tv_bin = pd.read_csv(f'./coverage_data/{tv_filename}/{tv_filename}_{tv_idx}_bin.csv').to_numpy().flatten()
+        coverages_dict = {}
+        for order in range(1,orders+1):
             # C(max_of_sv,order) -> choose 'order' of source views 
             combins = [c for c in combinations(range(sv_num), order)]
             for combin in combins:
-                # cam_key = '('
-                # for element in combin:
-                #     cam_key = cam_key + f'{element},'
-                # cam_key = cam_key + ')'
-                
                 merge_bin = np.zeros(MAX_NUM_TRI+1)
                 sv_bin = np.zeros(MAX_NUM_TRI+1)
                 for sv_idx in combin:
                     tmp_sv_bin = pd.read_csv(f'./coverage_data/{sv_filename}/{sv_filename}_{sv_idx}_bin.csv').to_numpy().flatten()
                     sv_bin = np.maximum(sv_bin, tmp_sv_bin)
-                merge_bin = np.minimum(tv_bin, tmp_sv_bin)
+                merge_bin = np.minimum(tv_bin, sv_bin)
                 coverage = np.sum(merge_bin) / PIXEL
                 coverages.append([tv_idx, combin, coverage])
+                coverages_dict[combin] = coverage
+        coverages_dict_list.append(coverages_dict)
     
     pd.DataFrame(coverages).to_csv(f'./coverage_results/{tv_filename}_to_{sv_filename}/{tv_filename}_to_{sv_filename}_results.csv', header=header_arr, index=False)
-    return coverages
+    return coverages_dict_list
 
 def computeQualityModel(tv_filename: str, sv_filename: str, order: int):
 
@@ -190,17 +185,20 @@ def computeQualityModel(tv_filename: str, sv_filename: str, order: int):
         if not os.path.isdir('./coverage_data'):
             os.makedirs('./coverage_data')
         
+        start_time = time.time()
         coordinate_transform.change_main(tv_filename)
         get_coverage_data(OBJ_PATH, tv_filename)
 
         coordinate_transform.change_main(sv_filename)
         get_coverage_data(OBJ_PATH, sv_filename)
+        end_time = time.time()
+        print(end_time-start_time)
 
 
     if COVERAGE_TABLE:
         return coverage_table_generator(tv_filename, sv_filename, order)
     
-def qualityLoader(file_path: str, kmax: int =None, model: str ='coverage') -> list:
+def qualityLoader(file_path: str, kmax: int = None, model: str ='coverage') -> list:
     '''
     file_path: path to a csv with format
         viewport,key,coverage,quaility1, qulaity2, ...
@@ -239,7 +237,7 @@ def qualityLoader(file_path: str, kmax: int =None, model: str ='coverage') -> li
 
 def main():
     start_time = time.time()
-    coverage_table = computeQualityModel(tv_filename, sv_filename, ORDER)
+    coverages_dict_list = computeQualityModel(tv_filename, sv_filename, ORDER)
     end_time = time.time()
     print(end_time-start_time)
                         

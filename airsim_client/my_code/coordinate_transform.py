@@ -3,6 +3,7 @@ import subprocess
 import csv
 import numpy as np
 import pandas as pd
+import multiprocessing as mp
 
 # ============================================================
 #        |  X|  Y|  Z| Yaw| Pitch| Roll|
@@ -75,10 +76,10 @@ def change_main(filename):
     poses_ue = import_cameras_pose(f'./pose_traces/{filename}.csv')
     if not os.path.isdir(f'./pose_traces/{filename}'):
         os.makedirs(f'./pose_traces/{filename}')
+    
     ue_to_airsim(poses_ue, filename)
     ue_to_miv(poses_ue, filename)
     seperate_pose(filename)
-
 
 def main():
     for camera_position in camera_positions:
