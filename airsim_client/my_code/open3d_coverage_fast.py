@@ -28,7 +28,7 @@ PIXEL = WIDTH * HEIGHT
 OBJ_PATH = './obj_source/bunny_mesh_merge.OBJ'
 MAX_NUM_TRI = 8754 # get from obj file
 VIEW_START_POINT = [0,0,5] # meters
-ORDER = 4
+ORDER = 3
 
 # ============================================================
 
@@ -180,9 +180,6 @@ def coverage_table_generator(tv_filename, sv_filename, tv_bin_arr, sv_bin_arr, o
 
 def computeQualityModel(tv_filename: str, sv_filename: str, order: int):
 
-    if not os.path.isdir('./coverage_data'):
-        os.makedirs('./coverage_data')
-    
     tv_bin_arr = get_coverage_data(OBJ_PATH, tv_filename)
     sv_bin_arr = get_coverage_data(OBJ_PATH, sv_filename)
 
