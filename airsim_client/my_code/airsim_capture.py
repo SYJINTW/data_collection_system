@@ -1,5 +1,7 @@
 # ready to run example: PythonClient/car/hello_car.py
 from http.client import CONTINUE
+import pathlib
+from turtle import position
 import setup_path
 import airsim
 import time
@@ -9,11 +11,12 @@ import math
 import numpy as np
 import os
 import json
+import time
+from pathlib import Path
 
 # Basic setting
 # ============================================================
-camera_positions = ['test0src', 'test0tar']
-scenes = ['bunny']
+
 CAPTURE_TEXTURE = True
 CAPTURE_DEPTH = True
 CONTINUE_FRAME = False
@@ -96,7 +99,9 @@ def import_cameras_pose(csvfile_PATH):
         rows = csv.reader(csv_f)
         next(rows) # skip header
         for row in rows:
+            print(row)
             cameras_pose.append(Camera_pose(row))
+    # print(cameras_pose)
     return cameras_pose
 
 
@@ -132,16 +137,17 @@ def set_camera_pose_to_airsim(client, camera_pose):
 
 
 
-def output_texture_responses_to_yuv(filename, name_responses, tex_responses):
+def output_texture_responses_to_yuv(camera_position, filename, name_responses, tex_responses):
     '''
     This function will output the texture output file in yuv10le format.
     '''
-    if not os.path.exists(f'{filename}'):
-        os.system(
-            f'powershell mkdir {filename}'
-        )
 
-    fileDir = f'./{filename}'
+    if not os.path.exists(f'./{camera_position}'):
+        os.mkdir(f'./{camera_position}')
+    if not os.path.exists(f'./{camera_position}/{filename}'):
+        os.mkdir(f'./{camera_position}/{filename}')
+    fileDir = f'./{camera_position}/{filename}'
+
     yuv_frames = [] # to store all the 16 bits frames
     
     for response_idx, response in enumerate(tex_responses):
@@ -182,7 +188,7 @@ def find_point_in_surface(surface_para, point, viewport):
 
 
 
-def output_depth_responses_to_yuv(filename, name_responses, depth_responses, zmin, zmax):
+def output_depth_responses_to_yuv(camera_position, filename, name_responses, depth_responses, zmin, zmax):
     '''
     This function will output the depth output file in yuv16le format.
     The depth information capture by airsim.ImageType.DisparityNormalized
@@ -191,14 +197,14 @@ def output_depth_responses_to_yuv(filename, name_responses, depth_responses, zmi
     from airsim to 16 bit for MIV type.
     '''
     
-    if not os.path.exists(f'{filename}'):
-        os.system(
-            f'powershell mkdir {filename}'
-        )
-    fileDir = f'./{filename}'
+    if not os.path.exists(f'./{camera_position}'):
+        os.mkdir(f'./{camera_position}')
+    if not os.path.exists(f'./{camera_position}/{filename}'):
+        os.mkdir(f'./{camera_position}/{filename}')
+    fileDir = f'./{camera_position}/{filename}'
     
     for response_idx, response in enumerate(depth_responses):
-        filename = f'{fileDir}/{name_responses[response_idx]}'
+        filepath = f'{fileDir}/{name_responses[response_idx]}'
         if response.pixels_as_float:
             response_float_data = response.image_data_float
             response_float_data = 0.125/np.array(response_float_data)
@@ -211,7 +217,7 @@ def output_depth_responses_to_yuv(filename, name_responses, depth_responses, zmi
             print(f"Type {response.image_type}, size {len(response.image_data_float)}")
             print(response.height, response.width)
             print(depth_16bit.dtype)
-            with open(f"{filename}_depth_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p16le.yuv", mode='wb') as f:
+            with open(f"{filepath}_depth_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p16le.yuv", mode='wb') as f:
                 yuv_frames.tofile(f)
     
 
@@ -295,10 +301,11 @@ def convert_airsim_coordinate_to_MIV_coordinate(airsim_camera_pose):
 
 # ============================================================
 
-def capture_main(filename):
+def capture_main(camera_position,filename):
     # read pose traces (where cameras should pose and rotate)
     pose_traces = [] # array of Camera_pose
-    pose_traces = import_cameras_pose(f'./pose_traces/{filename}/{filename}_airsim.csv')
+    # print(f'./pose_traces/{filename}/{filename}_airsim.csv')
+    pose_traces = import_cameras_pose(f'./{camera_position}/pose_traces/{filename}/{filename}_airsim.csv')
 
     # connect to the AirSim simulator
     client = airsim.VehicleClient()
@@ -309,9 +316,10 @@ def capture_main(filename):
     depth_responses = []
 
     for pose_trace in pose_traces:
-        client.simPause(True)
         name_responses.append(pose_trace.name)
         set_camera_pose_to_airsim(client, pose_trace) # change camera position
+        time.sleep(1)
+        client.simPause(True)
         print('Finish changing position')
         if CAPTURE_TEXTURE:
             if CAPTURE_DEPTH:
@@ -330,23 +338,27 @@ def capture_main(filename):
             continue
         print('Retrieved images: %d' % len(responses))
         client.simPause(False)
-        time.sleep(1)
+        # time.sleep(1)
 
-    output_texture_responses_to_yuv(filename, name_responses, texture_responses)
+    output_texture_responses_to_yuv(camera_position, filename, name_responses, texture_responses)
     if CAPTURE_DEPTH:
         zmin, zmax = z_boundary(depth_responses)
-        output_depth_responses_to_yuv(filename, name_responses, depth_responses, zmin, zmax)
+        output_depth_responses_to_yuv(camera_position, filename, name_responses, depth_responses, zmin, zmax)
         camera_parameter = generate_camera_para_json(pose_traces, 1, zmin, zmax, filename)
-        with open(f'./{filename}/{filename}.json', 'w') as f:
+        with open(f'./{camera_position}/{filename}/{filename}.json', 'w') as f:
             json.dump(camera_parameter, f)
 
 def main():
-    for camera_position in camera_positions:
-        for scene in scenes:
-            filename = f'{camera_position}_{scene}'
-            capture_main(filename)
+    for camera_position in (Path('.')).glob('drone_DS_*'):
+        filenames = []
+        num_in = len(list((Path(camera_position)/'pose_traces').glob('*_in*.csv')))
+        num_out = len(list((Path(camera_position)/'pose_traces').glob('*_out*.csv')))
+        filenames.extend([f'{camera_position}_in{i}' for i in range(num_in)])
+        filenames.extend([f'{camera_position}_out{i}' for i in range(num_out)])
+        for filename in filenames:
+            capture_main(camera_position,filename)
 
 
 if __name__ == '__main__':
     main()
-
+        
