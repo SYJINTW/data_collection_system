@@ -1,4 +1,5 @@
 from email import header
+from pathlib import Path
 from re import S
 import open3d as o3d
 import matplotlib.pyplot as plt
@@ -10,7 +11,6 @@ from itertools import combinations
 import time
 from tomlkit import string
 
-import coordinate_transform
 
 # ============================================================
 
@@ -35,12 +35,114 @@ sv_filename = 'sv_bunny'
 
 # ============================================================
 
-def get_primitive_ids(mesh_obj_path, _eye, _center, _up, filename, pose_filename):
-    mesh = o3d.io.read_triangle_mesh(mesh_obj_path)
-    mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
-    scene = o3d.t.geometry.RaycastingScene()
-    scene.add_triangles(mesh)
+class Camera_pose:
+    name = ""
+    ue = [0,0,0,0,0,0] # X, Y, Z, Yaw, Pitch, Roll -> meters and degrees
+    airsim = [0,0,0,0,0,0] # X, Y, Z, Yaw, Pitch, Roll -> meters and degrees
+    miv = [0,0,0,0,0,0] # X, Y, Z, Yaw, Pitch, Roll -> meters and degrees
+    camera = [
+            [0,0,0], # eye
+            [0,0,0], # center
+            [0,0,0]  # up
+            ]
 
+    position = [0, 0, 0] # X, Y, Z
+    rotation = [0, 0, 0] # Yaw, Pitch, Roll
+     
+    def __init__(self, _name, _array=[0,0,0,0,0,0],_cam_starting_point=[0,0,0],_coordinate = 'ue'):
+        self.name = _array[0]
+        _array = [float(i) for i in _array]
+        _cam_starting_point = [float(i) for i in _cam_starting_point]
+        if _coordinate == 'ue':
+            self.ue = _array
+            self.airsim = self.ue_to_airsim(self.ue)
+            self.miv = self.ue_to_miv(self.ue)
+            self.camera = self.airsim_to_camera(
+                                                self.airsim[0],
+                                                self.airsim[1],
+                                                self.airsim[2],
+                                                self.airsim[3],
+                                                self.airsim[4],
+                                                self.airsim[5],
+                                                _cam_starting_point
+                                                )
+        elif _coordinate == 'airsim':
+            self.airsim = _array
+            self.ue = self.airsim_to_ue(self.airsim)
+            self.miv = self.ue_to_miv(self.ue)
+            self.camera = self.airsim_to_camera(
+                                                self.airsim[0]*100-_cam_starting_point[0]*100,
+                                                self.airsim[1]*100-_cam_starting_point[1]*100,
+                                                self.airsim[2]*100-_cam_starting_point[2]*100,
+                                                self.airsim[3],
+                                                self.airsim[4],
+                                                self.airsim[5]
+                                                )
+        elif _coordinate == 'miv':
+            print('Not yet')
+        else:
+            print('error')
+    
+
+    def ue_to_airsim(self, ue_arr: list)->list:
+        airsim_arr = [
+                    ue_arr[0],
+                    ue_arr[1],
+                    -ue_arr[2],
+                    -ue_arr[3],
+                    ue_arr[4],
+                    ue_arr[5],
+                    ]
+        return airsim_arr
+
+    def airsim_to_ue(self, airsim_arr: list)->list:
+        ue_arr = [
+                    airsim_arr[0],
+                    airsim_arr[1],
+                    -airsim_arr[2],
+                    -airsim_arr[3],
+                    airsim_arr[4],
+                    airsim_arr[5],
+                    ]
+        return ue_arr
+
+    def ue_to_miv(self, ue_arr: list):
+        miv_arr = [
+                    ue_arr[0], 
+                    -ue_arr[1], 
+                    ue_arr[2],
+                    ue_arr[3], 
+                    -ue_arr[4],
+                    ue_arr[5]
+                    ]
+        return miv_arr
+
+    def airsim_to_camera(self, x: float, y: float, z: float, yaw: float, pitch: float, roll: float)->list:
+
+        eye = []
+        center = []
+        up = []
+
+        shift_xyz = [x,y,z]
+        r = R.from_euler('xyz', [roll, pitch, yaw], degrees=True)
+        rotMat = r.as_matrix()
+        
+        eye = np.round_(np.array([shift_xyz[1],-shift_xyz[2],-shift_xyz[0]]), decimals=2)
+        
+        center_arr = np.dot(rotMat, np.array([1,0,0]).T)
+        center = np.round_(np.array(eye + [center_arr[1],-center_arr[2],-center_arr[0]]), decimals=2)
+        
+        up_arr = np.dot(rotMat, np.array([0,0,1]).T)
+        up = np.round_([up_arr[1],-up_arr[2],-up_arr[0]], decimals=2)
+
+        return [eye,center,up]
+
+# ============================================================
+
+def get_primitive_ids(scene, _eye, _center, _up, dir_name, filename, pose_idx):
+    save_dir = f'./raw_data/{dir_name}/coverage_data/{filename}'
+    Path(save_dir).mkdir(parents=True, exist_ok=True)
+    
     rays = o3d.t.geometry.RaycastingScene.create_rays_pinhole(
         fov_deg=FOV,
         eye=_eye,
@@ -53,8 +155,9 @@ def get_primitive_ids(mesh_obj_path, _eye, _center, _up, filename, pose_filename
     ans = scene.cast_rays(rays)
     ans_datas = ans['primitive_ids'].numpy()
     
+    # save primitive_ids datas
     df = pd.DataFrame(ans_datas)
-    df.to_csv(f'./coverage_data/{filename}/{pose_filename}_primitive_ids.csv', index=False)
+    df.to_csv(f'{save_dir}/{pose_idx}_primitive_ids.csv', index=False)
     
     num_arr = np.zeros(MAX_NUM_TRI+1)
     unique, counts = np.unique(ans_datas, return_counts=True)
@@ -65,7 +168,9 @@ def get_primitive_ids(mesh_obj_path, _eye, _center, _up, filename, pose_filename
             num_arr[unique[idx]] = counts[idx]
 
     df_bin = pd.DataFrame(num_arr)
-    df_bin.to_csv(f'./coverage_data/{filename}/{pose_filename}_bin.csv', index=False)
+    df_bin.to_csv(f'{save_dir}/{pose_idx}_bin.csv', index=False)
+    
+    return num_arr
 
 def cal_coverage_by_np(base_view, src_view):
     base_num_arr = np.zeros(MAX_NUM_TRI+1)
@@ -112,27 +217,17 @@ def euler_to_camera(x,y,z,yaw,pitch,roll):
 
     return eye, center, up
 
-def get_coverage_data(mesh_obj_path, filename):
-    if not os.path.isdir('./coverage_data'):
-        os.makedirs('./coverage_data')
-    if not os.path.isdir(f'./coverage_data/{filename}'):
-        os.makedirs(f'./coverage_data/{filename}')
-    airsim_poses = pd.read_csv(f'./pose_traces/{filename}/{filename}_airsim.csv').to_numpy()
-    
-    for idx, airsim_pose in enumerate(airsim_poses):
-        name = f'{filename}_{idx}'
-        eye, center, up = euler_to_camera(airsim_pose[1]*100-VIEW_START_POINT[0]*100,
-                                            airsim_pose[2]*100-VIEW_START_POINT[1]*100,
-                                            airsim_pose[3]*100-VIEW_START_POINT[2]*100,
-                                            airsim_pose[4],
-                                            airsim_pose[5],
-                                            airsim_pose[6]
-                                            )
-        get_primitive_ids(mesh_obj_path, eye, center, up, filename, name)
+def get_coverage_data(scene, tv_poses, dir_name, filename):
+    num_arr = []
+    for pose_idx in range(len(tv_poses)):
+        tv_pose = tv_poses[pose_idx]
+        primitive_ids_data = get_primitive_ids(scene, tv_pose.camera[0], tv_pose.camera[1], tv_pose.camera[2], dir_name, filename, pose_idx)
+        num_arr.append(primitive_ids_data)
+    return num_arr
 
-def coverage_table_generator(tv_filename, sv_filename, orders):
+def coverage_table_generator(tv_bin_arrs, sv_bin_arrs, orders, dir_name, filename):
     '''
-    generate the coverage table to a csv_file
+    generate the coverage table by binary arrays to a csv_file
 
     output_filename:
     {tv_filename}_{sv_filename}_merge.csv
@@ -140,26 +235,21 @@ def coverage_table_generator(tv_filename, sv_filename, orders):
     foramt:
     [targetView,camSet,coverage]
     '''
+    save_dir = f'./raw_data/{dir_name}/coverage_results'
+    Path(save_dir).mkdir(parents=True, exist_ok=True)
     header_arr = ['targetView', 'camSet', 'coverage']
 
-    if not os.path.isdir(f'./coverage_results'):
-        os.makedirs(f'./coverage_results')
-    if not os.path.isdir(f'./coverage_results/{tv_filename}_to_{sv_filename}'):
-        os.makedirs(f'./coverage_results/{tv_filename}_to_{sv_filename}')
-
     # find tv_num
-    tv_poses = pd.read_csv(f'./pose_traces/{tv_filename}/{tv_filename}_airsim.csv')
-    tv_num = tv_poses.shape[0]
+    tv_num = len(tv_bin_arrs)
     
     # find sv_num
-    sv_poses = pd.read_csv(f'./pose_traces/{sv_filename}/{sv_filename}_airsim.csv')
-    sv_num = sv_poses.shape[0]
+    sv_num = len(sv_bin_arrs)
 
     coverages = []
     coverages_dict_list = []
     # for order in range(1,orders+1):
     for tv_idx in range(tv_num):
-        tv_bin = pd.read_csv(f'./coverage_data/{tv_filename}/{tv_filename}_{tv_idx}_bin.csv').to_numpy().flatten()
+        tv_bin = tv_bin_arrs[tv_idx]
         coverages_dict = {}
         for order in range(1,orders+1):
             # C(max_of_sv,order) -> choose 'order' of source views 
@@ -168,7 +258,7 @@ def coverage_table_generator(tv_filename, sv_filename, orders):
                 merge_bin = np.zeros(MAX_NUM_TRI+1)
                 sv_bin = np.zeros(MAX_NUM_TRI+1)
                 for sv_idx in combin:
-                    tmp_sv_bin = pd.read_csv(f'./coverage_data/{sv_filename}/{sv_filename}_{sv_idx}_bin.csv').to_numpy().flatten()
+                    tmp_sv_bin = sv_bin_arrs[sv_idx]
                     sv_bin = np.maximum(sv_bin, tmp_sv_bin)
                 merge_bin = np.minimum(tv_bin, sv_bin)
                 coverage = np.sum(merge_bin) / PIXEL
@@ -176,28 +266,21 @@ def coverage_table_generator(tv_filename, sv_filename, orders):
                 coverages_dict[combin] = coverage
         coverages_dict_list.append(coverages_dict)
     
-    pd.DataFrame(coverages).to_csv(f'./coverage_results/{tv_filename}_to_{sv_filename}/{tv_filename}_to_{sv_filename}_results.csv', header=header_arr, index=False)
+    pd.DataFrame(coverages).to_csv(f'{save_dir}/{filename}_results.csv', header=header_arr, index=False)
     return coverages_dict_list
 
-def computeQualityModel(tv_filename: str, sv_filename: str, order: int):
-
-    if OPEN3D_RENDER:
-        if not os.path.isdir('./coverage_data'):
-            os.makedirs('./coverage_data')
-        
-        start_time = time.time()
-        coordinate_transform.change_main(tv_filename)
-        get_coverage_data(OBJ_PATH, tv_filename)
-
-        coordinate_transform.change_main(sv_filename)
-        get_coverage_data(OBJ_PATH, sv_filename)
-        end_time = time.time()
-        print(end_time-start_time)
-
-
-    if COVERAGE_TABLE:
-        return coverage_table_generator(tv_filename, sv_filename, order)
+def computeQualityModel(objfile_PATH: Path, tv_poses: Camera_pose, sv_poses: Camera_pose, order: int, dir_name: str, group_idx: int):
+    # generate scene
+    mesh = o3d.io.read_triangle_mesh(objfile_PATH)
+    mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
+    scene = o3d.t.geometry.RaycastingScene()
+    scene.add_triangles(mesh)
     
+    # get tv and sv binary array
+    tv_bin_arrs = get_coverage_data(scene, tv_poses, dir_name, f'{dir_name}_out{group_idx}')
+    sv_bin_arrs = get_coverage_data(scene, sv_poses, dir_name, f'{dir_name}_in{group_idx}')
+    return coverage_table_generator(tv_bin_arrs, sv_bin_arrs, order, dir_name, f'{dir_name}_in{group_idx}_to_{dir_name}_out{group_idx}')
+   
 def qualityLoader(file_path: str, kmax: int = None, model: str ='coverage') -> list:
     '''
     file_path: path to a csv with format
@@ -236,10 +319,12 @@ def qualityLoader(file_path: str, kmax: int = None, model: str ='coverage') -> l
     return coverage_dict_list
 
 def main():
-    start_time = time.time()
-    coverages_dict_list = computeQualityModel(tv_filename, sv_filename, ORDER)
-    end_time = time.time()
-    print(end_time-start_time)
+    # objfile_PATH = './obj_source/bunny_mesh_merge.OBJ'
+    # start_time = time.time()
+    # computeQualityModel(objfile_PATH, tv_poses, sv_poses, order: int, filename)
+    # end_time = time.time()
+    # print(end_time-start_time)
+    print("coverage")
                         
 if __name__ == '__main__':
     main()
