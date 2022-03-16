@@ -10,6 +10,7 @@ from itertools import combinations
 import time
 
 import open3d_coverage
+import Camera_pose
 
 # from airsim_client.my_code.coordinate_transform import ue_to_airsim
 
@@ -21,131 +22,13 @@ MAX_NUM_TRI = 8754 # get from obj file
 
 # ============================================================
 
-# class Camera_pose:
-#     name = ""
-#     coordinate = ""
-#     position = [0, 0, 0] # X, Y, Z
-#     rotation = [0, 0, 0] # Yaw, Pitch, Roll
-    
-#     def __init__(self, _array=['',0,0,0,0,0,0,'ue']):
-#         self.name = _array[0]
-#         self.position = [float(x) for x in _array[1:4]]
-#         self.rotation = [float(x) for x in _array[4:7]]
-#         self.coordinate = _array[7]
-
-# ============================================================
-
-class Camera_pose:
-    name = ""
-    ue = [0,0,0,0,0,0] # X, Y, Z, Yaw, Pitch, Roll -> meters and degrees
-    airsim = [0,0,0,0,0,0] # X, Y, Z, Yaw, Pitch, Roll -> meters and degrees
-    miv = [0,0,0,0,0,0] # X, Y, Z, Yaw, Pitch, Roll -> meters and degrees
-    camera = [
-            [0,0,0], # eye
-            [0,0,0], # center
-            [0,0,0]  # up
-            ]
-
-    position = [0, 0, 0] # X, Y, Z
-    rotation = [0, 0, 0] # Yaw, Pitch, Roll
-     
-    def __init__(self, _name, _array=[0,0,0,0,0,0],_cam_starting_point=[0,0,0],_coordinate = 'ue'):
-        self.name = _array[0]
-        _array = [float(i) for i in _array]
-        _cam_starting_point = [float(i) for i in _cam_starting_point]
-        if _coordinate == 'ue':
-            self.ue = _array
-            self.airsim = self.ue_to_airsim(self.ue)
-            self.miv = self.ue_to_miv(self.ue)
-            self.camera = self.airsim_to_camera(
-                                                self.airsim[0],
-                                                self.airsim[1],
-                                                self.airsim[2],
-                                                self.airsim[3],
-                                                self.airsim[4],
-                                                self.airsim[5],
-                                                _cam_starting_point
-                                                )
-        elif _coordinate == 'airsim':
-            self.airsim = _array
-            self.ue = self.airsim_to_ue(self.airsim)
-            self.miv = self.ue_to_miv(self.ue)
-            self.camera = self.airsim_to_camera(
-                                                self.airsim[0]*100-_cam_starting_point[0]*100,
-                                                self.airsim[1]*100-_cam_starting_point[1]*100,
-                                                self.airsim[2]*100-_cam_starting_point[2]*100,
-                                                self.airsim[3],
-                                                self.airsim[4],
-                                                self.airsim[5]
-                                                )
-        elif _coordinate == 'miv':
-            print('Not yet')
-        else:
-            print('error')
-    
-
-    def ue_to_airsim(self, ue_arr: list)->list:
-        airsim_arr = [
-                    ue_arr[0],
-                    ue_arr[1],
-                    -ue_arr[2],
-                    -ue_arr[3],
-                    ue_arr[4],
-                    ue_arr[5],
-                    ]
-        return airsim_arr
-
-    def airsim_to_ue(self, airsim_arr: list)->list:
-        ue_arr = [
-                    airsim_arr[0],
-                    airsim_arr[1],
-                    -airsim_arr[2],
-                    -airsim_arr[3],
-                    airsim_arr[4],
-                    airsim_arr[5],
-                    ]
-        return ue_arr
-
-    def ue_to_miv(self, ue_arr: list):
-        miv_arr = [
-                    ue_arr[0], 
-                    -ue_arr[1], 
-                    ue_arr[2],
-                    ue_arr[3], 
-                    -ue_arr[4],
-                    ue_arr[5]
-                    ]
-        return miv_arr
-
-    def airsim_to_camera(self, x: float, y: float, z: float, yaw: float, pitch: float, roll: float)->list:
-
-        eye = []
-        center = []
-        up = []
-
-        shift_xyz = [x,y,z]
-        r = R.from_euler('xyz', [roll, pitch, yaw], degrees=True)
-        rotMat = r.as_matrix()
-        
-        eye = np.round_(np.array([shift_xyz[1],-shift_xyz[2],-shift_xyz[0]]), decimals=2)
-        
-        center_arr = np.dot(rotMat, np.array([1,0,0]).T)
-        center = np.round_(np.array(eye + [center_arr[1],-center_arr[2],-center_arr[0]]), decimals=2)
-        
-        up_arr = np.dot(rotMat, np.array([0,0,1]).T)
-        up = np.round_([up_arr[1],-up_arr[2],-up_arr[0]], decimals=2)
-
-        return [eye,center,up]
-
-# ============================================================
-
 def import_cameras_pose(csvfile_PATH):
     cameras_pose = []
     with open(csvfile_PATH, 'r') as csv_f:
         rows = csv.reader(csv_f) # [t,x,y,z,roll,pitch,yaw]
         next(rows) # skip header
         for row in rows:
-            cameras_pose.append(Camera_pose('',[row[1],row[2],row[3],row[6],row[5],row[4]],VIEW_START_POINT,'airsim'))
+            cameras_pose.append(Camera_pose.Camera_pose('',[row[1],row[2],row[3],row[6],row[5],row[4]],VIEW_START_POINT,'airsim'))
     return cameras_pose
 
 def airsim_to_camera(x,y,z,yaw,pitch,roll):

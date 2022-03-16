@@ -1,5 +1,4 @@
 # ready to run example: PythonClient/car/hello_car.py
-from http.client import CONTINUE
 import setup_path
 import airsim
 import time

@@ -14,6 +14,7 @@ def split_pose_and_generate_coverage_table(csvfile_PATH: Path, objfile_PATH: Pat
         order: for generating coverage table
 
     Returns:
+        the list of Camera_pose
         the list of dictionaries: [{CamSet: coverage}, {(0,): 1.0, (1,): 0.5}, {(0,): 1.0, (1,): 0.5}]
     '''
     output_poses_generator = choose_pose_traces.choose_pose_traces(csvfile_PATH, objfile_PATH, downsample_num, threshold_coverage, num_for_group, dir_name)
@@ -22,7 +23,7 @@ def split_pose_and_generate_coverage_table(csvfile_PATH: Path, objfile_PATH: Pat
         # for output_camera_pose in output_camera_poses:
         #     print(output_camera_pose.ue)
         coverage_table = open3d_coverage.computeQualityModel(objfile_PATH,output_camera_poses,output_camera_poses,order,dir_name,group_idx)
-        yield coverage_table
+        yield output_camera_poses, coverage_table
 
 def main():
     csvfile_PATH = './pose_traces/raw_pose_from_capture.csv'
@@ -34,7 +35,11 @@ def main():
     order = 3
 
     coverage_table_generator = split_pose_and_generate_coverage_table(csvfile_PATH, objfile_PATH, downsample_num, threshold_coverage, num_for_group, dir_name,order)
-    print(next(coverage_table_generator))
+    poses, coverage_table =  next(coverage_table_generator)
+    print(type(poses))
+    print(poses[0].ue)
+    print(type(poses[0].ue))
+
                         
 if __name__ == '__main__':
     main()
