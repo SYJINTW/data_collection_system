@@ -166,7 +166,10 @@ def choose_pose_traces(csvfile_PATH: Path, objfile_PATH: Path, downsample_num: i
                     group_idx = group_idx + 1
 
 def main():
-    print("coordinate_transform")
+    objfile_PATH = './obj_source/bunny_mesh_merge.OBJ'
+    mesh = o3d.io.read_triangle_mesh(objfile_PATH)
+    print(np.asarray(mesh.triangles).shape[0])
+    # print("coordinate_transform")
 
 if __name__ == '__main__':
     main()
