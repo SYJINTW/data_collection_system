@@ -23,11 +23,16 @@ def split_and_cov_table(workdir_PATH: Path,
     scene.add_triangles(mesh)
 
 
-    pose_data_arr = split_poses.splitPoses(workdir_PATH, csvfile_PATH_list, num_of_group, num_of_frame, threshold_coverage, downsample_num, num_of_cam, scene, MAX_NUM_TRI)
+    pose_data_arr = split_poses.splitPoses(workdir_PATH, csvfile_PATH_list, num_of_group, num_of_frame, threshold_coverage, downsample_num, num_of_cam, scene, MAX_NUM_TRI, VIEW_START_POINT)
     for group_idx in range(len(pose_data_arr)):
         print(f'Group {group_idx}')
         coverage_table = open3d_coverage.computeQualityModel(workdir_PATH, pose_data_arr[group_idx], pose_data_arr[group_idx], order, group_idx, scene, MAX_NUM_TRI)
-        yield coverage_table
+        
+        poses = np.empty((0,6))
+        for pose in pose_data_arr[group_idx]:
+            poses = np.append(poses, np.array([[pose.airsim[0],pose.airsim[1],pose.airsim[2],pose.airsim[5],pose.airsim[4],pose.airsim[3]]]), axis=0)
+
+        yield poses, coverage_table
     
 def main():
     workdir_PATH = Path('./test')
@@ -55,8 +60,8 @@ def main():
                                                         VIEW_START_POINT)
     
     for idx in range(num_of_group):
-        table = next(split_and_cov_table_generator)
-        print(table)
+        poses, table = next(split_and_cov_table_generator)
+        print(poses)
 
 if __name__ == '__main__':
     main()

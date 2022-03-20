@@ -8,16 +8,15 @@ from pathlib import Path
 # ============================================================
 
 import CameraPose
-import open3d_coverage
 
 # ============================================================
 
-VIEW_START_POINT = [0,0,5] # meters
-MAX_NUM_TRI = 8754 # get from obj file
+# VIEW_START_POINT = [0,0,5] # meters
+# MAX_NUM_TRI = 8754 # get from obj file
 
 # ============================================================
 
-def import_cameras_pose(csvfile_PATH):
+def import_cameras_pose(csvfile_PATH: Path, VIEW_START_POINT: int):
     cameras_pose = []
     with open(csvfile_PATH, 'r') as csv_f:
         rows = csv.reader(csv_f) # [t,x,y,z,roll,pitch,yaw]
@@ -26,7 +25,7 @@ def import_cameras_pose(csvfile_PATH):
             cameras_pose.append(CameraPose.CameraPose('',[row[1],row[2],row[3],row[6],row[5],row[4]],VIEW_START_POINT,'airsim'))
     return cameras_pose
 
-def get_primitive_ids(scene, _eye, _center, _up, MAX_NUM_TRI):
+def get_primitive_ids(scene: o3d.cpu.pybind.t.geometry.RaycastingScene, _eye: list, _center: list, _up: list, MAX_NUM_TRI: int):
 
     rays = o3d.t.geometry.RaycastingScene.create_rays_pinhole(
         fov_deg=90,
@@ -138,7 +137,9 @@ def choose_pose_traces(poses_in_group: list, threshold_coverage: float, downsamp
     return pose_data, pose_datas_airsim, pose_datas_miv
 
 
-def splitPoses(workdir_PATH: Path, csvfile_PATH_list: list, num_of_group: int, num_of_frame: int, threshold_coverage: float, downsample_num: int, num_of_cam: int, scene, MAX_NUM_TRI):
+def splitPoses(workdir_PATH: Path, csvfile_PATH_list: list,
+            num_of_group: int, num_of_frame: int, threshold_coverage: float, downsample_num: int, num_of_cam: int, 
+            scene: o3d.cpu.pybind.t.geometry.RaycastingScene, MAX_NUM_TRI: int, VIEW_START_POINT: int):
     '''
     Args:
         workdir_PATH:
@@ -154,12 +155,12 @@ def splitPoses(workdir_PATH: Path, csvfile_PATH_list: list, num_of_group: int, n
     # read all the poses
     all_poses = []
     for csvfile_PATH in csvfile_PATH_list:
-        poses = import_cameras_pose(csvfile_PATH)[:total_frames]
+        poses = import_cameras_pose(csvfile_PATH, VIEW_START_POINT)[:total_frames]
         all_poses.append(poses)
 
     print(f'Total number of poses: {len(all_poses)}')
-    for group_idx in range(len(all_poses)):
-        print(f'Number of pose traces in pose {group_idx}: {len(all_poses[group_idx])}')
+    # for group_idx in range(len(all_poses)):
+    #     print(f'Number of pose traces in pose {group_idx}: {len(all_poses[group_idx])}')
         
     # split all the poses by group and save to csv
     raw_pose_path = Path(workdir_PATH,'pose_traces','raw_poses')
@@ -172,15 +173,10 @@ def splitPoses(workdir_PATH: Path, csvfile_PATH_list: list, num_of_group: int, n
             group_of_poses.append(part_of_poses)
             tmp = [i.airsim for i in part_of_poses]
             # print(f'{raw_pose_path}/{csvfile_PATH_list[all_pose_idx].stem}_group{int(idx/num_of_frame)}_raw.csv')
-            pd.DataFrame(tmp).to_csv(f'{raw_pose_path}/{csvfile_PATH_list[all_pose_idx].stem}_group{int(idx/num_of_frame)}_raw.csv', header=['X','Y','Z','Yaw','Pitch','Row'],index=False)
+            pd.DataFrame(tmp).to_csv(f'{raw_pose_path}/{csvfile_PATH_list[all_pose_idx].stem}_group{int(idx/num_of_frame)}_raw.csv', header=['X','Y','Z','Yaw','Pitch','Roll'],index=False)
         poses_in_groups.append(group_of_poses)
 
-    # load obj scene
-    # mesh = o3d.io.read_triangle_mesh(str(objfile_PATH))
-    # mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
-    # scene = o3d.t.geometry.RaycastingScene()
-    # scene.add_triangles(mesh)
-
+    # mkdir for airsim and miv
     airsim_pose_path = Path(workdir_PATH,'pose_traces','airsim_poses')
     airsim_pose_path.mkdir(parents=True, exist_ok=True)
     miv_pose_path = Path(workdir_PATH,'pose_traces','miv_poses')
@@ -192,13 +188,12 @@ def splitPoses(workdir_PATH: Path, csvfile_PATH_list: list, num_of_group: int, n
     pose_datas_miv_arr = []
     for idx in range(len(poses_in_groups)):
         pose_data, pose_datas_airsim, pose_datas_miv = choose_pose_traces(poses_in_groups[idx], threshold_coverage, downsample_num, num_of_cam, scene, MAX_NUM_TRI)
-        print(f'Group {idx}')
-        print('Number of tv: ', len(pose_datas_airsim))
+        print(f'Group {idx} get {len(pose_datas_airsim)} source views')
         pose_data_arr.append(pose_data)
         pose_datas_airsim_arr.append(pose_datas_airsim)
         pose_datas_miv_arr.append(pose_datas_miv)
-        pd.DataFrame(pose_datas_airsim).to_csv(f'{airsim_pose_path}/poseAll_group{idx}_airsim.csv', header=['Name','X','Y','Z','Yaw','Pitch','Row'],index=False)
-        pd.DataFrame(pose_datas_miv).to_csv(f'{miv_pose_path}/poseAll_group{idx}_miv.csv', header=['Name','X','Y','Z','Yaw','Pitch','Row'],index=False)
+        pd.DataFrame(pose_datas_airsim).to_csv(f'{airsim_pose_path}/poseAll_group{idx}_airsim.csv', header=['Name','X','Y','Z','Yaw','Pitch','Roll'],index=False)
+        pd.DataFrame(pose_datas_miv).to_csv(f'{miv_pose_path}/poseAll_group{idx}_miv.csv', header=['Name','X','Y','Z','Yaw','Pitch','Roll'],index=False)
     
     return pose_data_arr
 
