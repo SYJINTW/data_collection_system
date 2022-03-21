@@ -138,11 +138,8 @@ def set_camera_pose_to_airsim(client, camera_pose):
         True
     )
     pose = client.simGetVehiclePose()
-    # print('x: ', pose.position.x_val)
-
-
-
-def output_texture_responses_to_yuv(save_dir, name_responses, tex_responses):
+    
+def output_texture_responses_to_yuv(save_dir: Path, name_responses: list, tex_responses: list):
     '''
     This function will output the texture output file in yuv10le format.
     '''
@@ -168,7 +165,10 @@ def output_texture_responses_to_yuv(save_dir, name_responses, tex_responses):
 
             # turn png into yuv
             os.system(
-                f"powershell ffmpeg -y -i {filename}_tex.png -pix_fmt yuv420p10le {filename}_texture_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p10le.yuv"
+                f"powershell ffmpeg -y \
+                    -i {filename}_tex.png \
+                    -pix_fmt yuv420p10le \
+                    {filename}_texture_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p10le.yuv"
                 )
 
 def cal_surface(v1, v2, v3):
@@ -183,7 +183,6 @@ def find_point_in_surface(surface_para, point, viewport):
     n_vector = np.array(surface_para[0], surface_para[1], surface_para[2])
     k = -(np.dot(point, n_vector)+surface_para[3])/np.dot(line_vector, n_vector)
     
-
 def output_depth_responses_to_yuv(save_dir, name_responses, depth_responses, zmin, zmax):
     '''
     This function will output the depth output file in yuv16le format.
@@ -210,7 +209,6 @@ def output_depth_responses_to_yuv(save_dir, name_responses, depth_responses, zmi
             with open(f"{filename}_depth_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p16le.yuv", mode='wb') as f:
                 yuv_frames.tofile(f)
     
-
 def z_boundary(depth_responses):
     zmin = math.inf
     zmax = -math.inf
@@ -278,7 +276,6 @@ def generate_camera_para_json(cameras_pose, num_frames, zmin, zmax, contentName)
     camera_parameter["cameras"].append(viewport_parameter)
     return camera_parameter
 
-
 def convert_airsim_coordinate_to_MIV_coordinate(airsim_camera_pose):
     MIV_camera_pose = Camera_pose()
     # x, y, z
@@ -298,7 +295,7 @@ def capture_main(workdir_PATH: Path, csvfile_Path: Path):
     '''
 
     filename = csvfile_Path.stem
-    groupNum = filename.split('_')[1]
+    groupNum = filename.split('_')[1] # filename will be sourceView_{groupNum}
 
     # read pose traces (where cameras should pose and rotate)
     pose_traces = import_airsim_pose(csvfile_Path)
@@ -335,10 +332,12 @@ def capture_main(workdir_PATH: Path, csvfile_Path: Path):
         client.simPause(False)
         time.sleep(1)
     
+    # dir to store yuv file
     save_dir = Path(workdir_PATH,'capture_data',f'group{groupNum}')
     save_dir.mkdir(parents=True, exist_ok=True)
 
     output_texture_responses_to_yuv(save_dir, name_responses, texture_responses)
+    
     if CAPTURE_DEPTH:
         zmin, zmax = z_boundary(depth_responses)
         output_depth_responses_to_yuv(save_dir, name_responses, depth_responses, zmin, zmax)
@@ -390,27 +389,39 @@ def merge_gt(workdir_PATH: Path, poseNum: int, groupNum: int):
     
     yuvfile_PATH = Path(workdir_PATH,'ground_truth',f'pose{poseNum}',f'group{groupNum}')
     
-    save_PATH = Path(workdir_PATH,'ground_truth',f'group{groupNum}')
+    save_PATH = Path(workdir_PATH,'ground_truth')
     
     all_gt_yuv = yuvfile_PATH.glob('*_texture_1280x720_yuv420p10le.yuv')
     gt_num = len([i.stem for i in all_gt_yuv])
     
-    with open(f'{yuvfile_PATH}/')
+    cat_list = ''
     for idx in range(gt_num):
+        cat_list = cat_list + f"file v{idx}_texture_1280x720_yuv420p10le.yuv\n"
+    with open(f'{yuvfile_PATH}\merge.txt', 'w') as f:
+        f.write(cat_list)
 
-    os.system(f'ffmpeg -f rawvideo -f concat -safe 0 -i myfile.txt -c {save_PATH}/group{groupNum}.yuv')
-    print(gt_num)
-    
+# ============================================================
+
 def main():
     workdir_PATH = Path('./test')
-    # csvfile_Path_arr = [Path(f'./test/exp_data/sourceView_{i}.csv') for i in range(3)]
-    # for csvfile_Path in csvfile_Path_arr:
-    #     capture_main(workdir_PATH, csvfile_Path)
-    
-    # capture_gt(workdir_PATH, 0, 0)
-    merge_gt(workdir_PATH, 0, 0)
+    csvfile_Path_arr = [Path(f'./test/exp_data/sourceView_{i}.csv') for i in range(3)]
+    for csvfile_Path in csvfile_Path_arr:
+        capture_main(workdir_PATH, csvfile_Path)
 
+def gt_main():
+    workdir_PATH = Path('./test')
+    path, dirs, files = next(os.walk(f"{workdir_PATH}/exp_data"))
+    groupNum = len(files)
+    path, dirs, files = next(os.walk(f"{workdir_PATH}/raw_poses"))
+    poseNum = len(files)
+    print('Number of group:', groupNum)
+    print('Number of pose:', poseNum)
+    for poseIdx in range(poseNum):
+        for groupIdx in range(groupNum):
+            capture_gt(workdir_PATH, poseIdx, groupIdx)
 
 if __name__ == '__main__':
+    # gt_main()
     main()
+
 

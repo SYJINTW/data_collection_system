@@ -1,43 +1,22 @@
 from pathlib import Path
 from re import S
 import open3d as o3d
-import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-import os
 from scipy.spatial.transform import Rotation as R
 from itertools import combinations
-import time
-import CameraPose
-
-
-# ============================================================
-
-OPEN3D_RENDER = True
-COVERAGE_TABLE = True
-
-# ============================================================
-
-FOV = 90 # degree
-WIDTH = 1280 # pixel
-HEIGHT = 720 # pixel
-PIXEL = WIDTH * HEIGHT
-OBJ_PATH = './obj_source/bunny_mesh_merge.OBJ'
-MAX_NUM_TRI = 8754 # get from obj file
-VIEW_START_POINT = [0,0,5] # meters
-ORDER = 3
 
 # ============================================================
 
 def get_primitive_ids(scene, _eye: list, _center: list, _up: list, save_dir_PATH: Path, filename: str, MAX_NUM_TRI: int):
     
     rays = o3d.t.geometry.RaycastingScene.create_rays_pinhole(
-        fov_deg=FOV,
+        fov_deg=90,
         eye=_eye,
         center=_center,
         up=_up,
-        width_px=WIDTH,
-        height_px=HEIGHT,
+        width_px=1280,
+        height_px=720,
     )
 
     ans = scene.cast_rays(rays)
@@ -69,7 +48,7 @@ def get_coverage_data(scene, poses: list, save_dir_PATH: Path, filename: str, MA
         num_arr.append(primitive_ids_data)
     return num_arr
 
-def coverage_table_generator(tv_bin_arrs, sv_bin_arrs, orders: int, save_dir_PATH: Path, filename: str):
+def coverage_table_generator(tv_bin_arrs, sv_bin_arrs, orders: int, save_dir_PATH: Path, filename: str, MAX_NUM_TRI: int):
     '''
     generate the coverage table by binary arrays to a csv_file
     '''
@@ -98,7 +77,7 @@ def coverage_table_generator(tv_bin_arrs, sv_bin_arrs, orders: int, save_dir_PAT
                     tmp_sv_bin = sv_bin_arrs[sv_idx]
                     sv_bin = np.maximum(sv_bin, tmp_sv_bin)
                 merge_bin = np.minimum(tv_bin, sv_bin)
-                coverage = np.sum(merge_bin) / PIXEL
+                coverage = np.sum(merge_bin) / (1280*720)
                 coverages.append([tv_idx, combin, coverage])
                 coverages_dict[combin] = coverage
         coverages_dict_list.append(coverages_dict)
@@ -118,7 +97,7 @@ def computeQualityModel(workdir_PATH: Path, tv_poses: list, sv_poses: list, orde
     save_dir_PATH = Path(f'{workdir_PATH}/coverage_table')
     save_dir_PATH.mkdir(parents=True, exist_ok=True)
     
-    return coverage_table_generator(tv_bin_arrs, sv_bin_arrs, order, save_dir_PATH, f'in_to_out{group_idx}')
+    return coverage_table_generator(tv_bin_arrs, sv_bin_arrs, order, save_dir_PATH, f'in_to_out{group_idx}', MAX_NUM_TRI)
 
 def main():
     print("coverage")
