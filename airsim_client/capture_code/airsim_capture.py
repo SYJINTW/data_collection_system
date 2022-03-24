@@ -14,7 +14,7 @@ from pathlib import Path
 # ============================================================
 
 CAPTURE_TEXTURE = True
-CAPTURE_DEPTH = False
+CAPTURE_DEPTH = True
 
 # setting.json setting for airsim server
 # ============================================================
@@ -96,8 +96,9 @@ def import_airsim_pose(csvfile_PATH): # airsim data from SM [X,Y,Z,Roll,Pitch,Ya
         pose_idx = 0
         for row in rows:
             row = row[0].split()
-            cameras_pose.append(Camera_pose(f'v{pose_idx}', [row[0],row[1],row[2],row[5],row[4],row[3]]))
-            pose_idx = pose_idx + 1
+            if not (float(row[0]) == 0 and float(row[1]) == 0 and float(row[2]) == 0):  
+                cameras_pose.append(Camera_pose(f'v{pose_idx}', [row[0],row[1],row[2],row[5],row[4],row[3]]))
+                pose_idx = pose_idx + 1
     return cameras_pose
 
 def import_raw_pose(csvfile_PATH): # raw airsim data [X,Y,Z,Yaw,Pitch,Roll]
@@ -410,7 +411,6 @@ def main():
         for csvfile_PATH in Path(workdir_PATH).glob('sourceView_*'):
             print(csvfile_PATH)
             capture_main(workdir_PATH, csvfile_PATH)
-            break
 
 def gt_main():
     all_workdir_PATH = Path('.').glob('idF5_*')
@@ -419,10 +419,12 @@ def gt_main():
         for csvfile_PATH in Path(workdir_PATH,'pose_traces','raw_poses').glob('*_raw.csv'):
             print(csvfile_PATH)
             capture_gt(workdir_PATH, csvfile_PATH)
-        break
 
 if __name__ == '__main__':
     # gt_main()
+    start_time = time.time()
     main()
+    end_time = time.time()
+    print(end_time-start_time)
 
 
