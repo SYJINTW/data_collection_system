@@ -95,6 +95,7 @@ def import_airsim_pose(csvfile_PATH): # airsim data from SM [X,Y,Z,Roll,Pitch,Ya
         next(rows) # skip header
         pose_idx = 0
         for row in rows:
+            row = row[0].split()
             cameras_pose.append(Camera_pose(f'v{pose_idx}', [row[0],row[1],row[2],row[5],row[4],row[3]]))
             pose_idx = pose_idx + 1
     return cameras_pose
@@ -139,7 +140,7 @@ def set_camera_pose_to_airsim(client, camera_pose):
     )
     pose = client.simGetVehiclePose()
     
-def output_texture_responses_to_yuv(save_dir: Path, name_responses: list, tex_responses: list):
+def output_texture_responses_to_yuv(savedir_PATH: Path, name_responses: list, tex_responses: list):
     '''
     This function will output the texture output file in yuv10le format.
     '''
@@ -147,7 +148,7 @@ def output_texture_responses_to_yuv(save_dir: Path, name_responses: list, tex_re
     yuv_frames = [] # to store all the 16 bits frames
     
     for response_idx, response in enumerate(tex_responses):
-        filename = f'{save_dir}/{name_responses[response_idx]}'
+        filename = f'{savedir_PATH}/{name_responses[response_idx]}'
         if not response.pixels_as_float: # Scene
             # save png
             # Get from https://github.com/microsoft/AirSim/blob/master/docs/image_apis.md#using-airsim-images-with-numpy
@@ -183,7 +184,7 @@ def find_point_in_surface(surface_para, point, viewport):
     n_vector = np.array(surface_para[0], surface_para[1], surface_para[2])
     k = -(np.dot(point, n_vector)+surface_para[3])/np.dot(line_vector, n_vector)
     
-def output_depth_responses_to_yuv(save_dir, name_responses, depth_responses, zmin, zmax):
+def output_depth_responses_to_yuv(savedir_PATH, name_responses, depth_responses, zmin, zmax):
     '''
     This function will output the depth output file in yuv16le format.
     The depth information capture by airsim.ImageType.DisparityNormalized
@@ -193,7 +194,7 @@ def output_depth_responses_to_yuv(save_dir, name_responses, depth_responses, zmi
     '''
      
     for response_idx, response in enumerate(depth_responses):
-        filename = f'{save_dir}/{name_responses[response_idx]}'
+        filename = f'{savedir_PATH}/{name_responses[response_idx]}'
         if response.pixels_as_float:
             response_float_data = response.image_data_float
             response_float_data = 0.125/np.array(response_float_data)
@@ -288,17 +289,20 @@ def convert_airsim_coordinate_to_MIV_coordinate(airsim_camera_pose):
 
 # ============================================================
 
-def capture_main(workdir_PATH: Path, csvfile_Path: Path):
+def capture_main(workdir_PATH: Path, csvfile_PATH: Path):
     '''
     workdir_PATH:
     csvfile_Path:
     '''
 
-    filename = csvfile_Path.stem
-    groupNum = filename.split('_')[1] # filename will be sourceView_{groupNum}
+    # create save dir
+    groupNum = csvfile_PATH.stem.split('_')[1]
+    savedir_PATH = Path(workdir_PATH,'capture_SV',f'group{groupNum}')
+    savedir_PATH.mkdir(parents=True, exist_ok=True)
 
     # read pose traces (where cameras should pose and rotate)
-    pose_traces = import_airsim_pose(csvfile_Path)
+
+    pose_traces = import_airsim_pose(csvfile_PATH)
     
     # connect to the AirSim simulator
     client = airsim.VehicleClient()
@@ -309,9 +313,10 @@ def capture_main(workdir_PATH: Path, csvfile_Path: Path):
     depth_responses = []
     
     for pose_trace in pose_traces:
-        client.simPause(True)
         name_responses.append(pose_trace.name)
         set_camera_pose_to_airsim(client, pose_trace) # change camera position
+        time.sleep(1)
+        client.simPause(True)
         print('Finish changing position')
         if CAPTURE_TEXTURE:
             if CAPTURE_DEPTH:
@@ -330,32 +335,31 @@ def capture_main(workdir_PATH: Path, csvfile_Path: Path):
             continue
         print('Retrieved images: %d' % len(responses))
         client.simPause(False)
-        time.sleep(1)
     
-    # dir to store yuv file
-    save_dir = Path(workdir_PATH,'capture_data',f'group{groupNum}')
-    save_dir.mkdir(parents=True, exist_ok=True)
+    # # dir to store yuv file
+    # save_dir = Path(workdir_PATH,'capture_data',f'group{groupNum}')
+    # save_dir.mkdir(parents=True, exist_ok=True)
 
-    output_texture_responses_to_yuv(save_dir, name_responses, texture_responses)
+    output_texture_responses_to_yuv(savedir_PATH, name_responses, texture_responses)
     
     if CAPTURE_DEPTH:
         zmin, zmax = z_boundary(depth_responses)
-        output_depth_responses_to_yuv(save_dir, name_responses, depth_responses, zmin, zmax)
+        output_depth_responses_to_yuv(savedir_PATH, name_responses, depth_responses, zmin, zmax)
         camera_parameter = generate_camera_para_json(pose_traces, 1, zmin, zmax, workdir_PATH.stem)
-        with open(f'{save_dir}/{filename}.json', 'w') as f:
+        with open(f'{savedir_PATH}/group{groupNum}.json', 'w') as f:
             json.dump(camera_parameter, f)
 
-def capture_gt(workdir_PATH: Path, poseNum: int, groupNum: int):
+def capture_gt(workdir_PATH: Path, csvfile_PATH: Path):
     '''
     workdir_PATH:
     poseNum:
     groupNum:
     '''
 
-    csvfile_PATH = Path(workdir_PATH,'pose_traces','raw_poses',f'pose{poseNum}_group{groupNum}_raw.csv')
-    
-    save_dir = Path(workdir_PATH,'ground_truth',f'pose{poseNum}',f'group{groupNum}')
-    save_dir.mkdir(parents=True, exist_ok=True)
+    # create save dir
+    filename_split = csvfile_PATH.stem.split('_')
+    savedir_PATH = Path(workdir_PATH,'capture_GT',filename_split[0],filename_split[1])
+    savedir_PATH.mkdir(parents=True, exist_ok=True)
 
     # read pose traces (where cameras should pose and rotate)
     pose_traces = import_raw_pose(csvfile_PATH)
@@ -366,24 +370,21 @@ def capture_gt(workdir_PATH: Path, poseNum: int, groupNum: int):
 
     name_responses = []
     texture_responses = []
-    # depth_responses = []
     
     for pose_trace in pose_traces:
-        client.simPause(True)
         name_responses.append(pose_trace.name)
         set_camera_pose_to_airsim(client, pose_trace) # change camera position
+        time.sleep(1)
+        client.simPause(True)
         print('Finish changing position')
-        
         responses = client.simGetImages([
             airsim.ImageRequest('', airsim.ImageType.Scene, False, False),
             ])
         texture_responses.append(responses[0])
-        
         print('Retrieved images: %d' % len(responses))
         client.simPause(False)
-        time.sleep(1)
     
-    output_texture_responses_to_yuv(save_dir, name_responses, texture_responses)
+    output_texture_responses_to_yuv(savedir_PATH, name_responses, texture_responses)
 
 def merge_gt(workdir_PATH: Path, poseNum: int, groupNum: int):
     
@@ -403,22 +404,22 @@ def merge_gt(workdir_PATH: Path, poseNum: int, groupNum: int):
 # ============================================================
 
 def main():
-    workdir_PATH = Path('./test')
-    csvfile_Path_arr = [Path(f'./test/exp_data/sourceView_{i}.csv') for i in range(3)]
-    for csvfile_Path in csvfile_Path_arr:
-        capture_main(workdir_PATH, csvfile_Path)
+    all_workdir_PATH = Path('.').glob('idF5_*')
+    for workdir_PATH in all_workdir_PATH:
+        print(workdir_PATH)
+        for csvfile_PATH in Path(workdir_PATH).glob('sourceView_*'):
+            print(csvfile_PATH)
+            capture_main(workdir_PATH, csvfile_PATH)
+            break
 
 def gt_main():
-    workdir_PATH = Path('./test')
-    path, dirs, files = next(os.walk(f"{workdir_PATH}/exp_data"))
-    groupNum = len(files)
-    path, dirs, files = next(os.walk(f"{workdir_PATH}/raw_poses"))
-    poseNum = len(files)
-    print('Number of group:', groupNum)
-    print('Number of pose:', poseNum)
-    for poseIdx in range(poseNum):
-        for groupIdx in range(groupNum):
-            capture_gt(workdir_PATH, poseIdx, groupIdx)
+    all_workdir_PATH = Path('.').glob('idF5_*')
+    for workdir_PATH in all_workdir_PATH:
+        print(workdir_PATH)
+        for csvfile_PATH in Path(workdir_PATH,'pose_traces','raw_poses').glob('*_raw.csv'):
+            print(csvfile_PATH)
+            capture_gt(workdir_PATH, csvfile_PATH)
+        break
 
 if __name__ == '__main__':
     # gt_main()
