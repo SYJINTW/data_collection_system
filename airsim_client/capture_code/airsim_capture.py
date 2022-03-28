@@ -227,7 +227,8 @@ def get_zmin_zmax(depth_response):
         @para responses: [disp, scene]
     '''
     response = depth_response.image_data_float
-    response = 0.125/np.array(response) # from disp to depth
+    response = np.array(response)*100/255 # from disp to depth
+    # response = 0.125/np.array(response) # from disp to depth
     return response.min(), response.max()
 
 def generate_camera_para_json(cameras_pose, num_frames, zmin, zmax, contentName):
@@ -314,17 +315,22 @@ def capture_main(workdir_PATH: Path, csvfile_PATH: Path):
     depth_responses = []
     
     for pose_trace in pose_traces:
-        name_responses.append(pose_trace.name)
-        set_camera_pose_to_airsim(client, pose_trace) # change camera position
         time.sleep(1)
         client.simPause(True)
+        start_time = time.time()
+        name_responses.append(pose_trace.name)
+        set_camera_pose_to_airsim(client, pose_trace) # change camera position
         print('Finish changing position')
         if CAPTURE_TEXTURE:
             if CAPTURE_DEPTH:
                 responses = client.simGetImages([
                     airsim.ImageRequest('', airsim.ImageType.Scene, False, False),
-                    airsim.ImageRequest('', airsim.ImageType.DisparityNormalized, True),
+                    airsim.ImageRequest('', airsim.ImageType.DepthVis, True),
                     ])
+                # responses = client.simGetImages([
+                #     airsim.ImageRequest('', airsim.ImageType.Scene, False, False),
+                #     airsim.ImageRequest('', airsim.ImageType.DisparityNormalized, True),
+                #     ])
                 texture_responses.append(responses[0])
                 depth_responses.append(responses[1])
             else:
@@ -335,6 +341,8 @@ def capture_main(workdir_PATH: Path, csvfile_PATH: Path):
         else:
             continue
         print('Retrieved images: %d' % len(responses))
+        end_time = time.time()
+        print(end_time-start_time)
         client.simPause(False)
     
     # # dir to store yuv file
@@ -405,7 +413,7 @@ def merge_gt(workdir_PATH: Path, poseNum: int, groupNum: int):
 # ============================================================
 
 def main():
-    all_workdir_PATH = Path('.').glob('idF5_*')
+    all_workdir_PATH = Path('.').glob('idF5_slvrNSAbf_ds5_L6_k6_ch9_r1.0_thr0.5')
     for workdir_PATH in all_workdir_PATH:
         print(workdir_PATH)
         for csvfile_PATH in Path(workdir_PATH).glob('sourceView_*'):
@@ -422,9 +430,9 @@ def gt_main():
 
 if __name__ == '__main__':
     # gt_main()
-    start_time = time.time()
+    # start_time = time.time()
     main()
-    end_time = time.time()
-    print(end_time-start_time)
+    # end_time = time.time()
+    # print(end_time-start_time)
 
 
