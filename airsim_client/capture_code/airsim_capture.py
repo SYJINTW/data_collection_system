@@ -5,7 +5,6 @@ import csv
 import cv2
 import math
 import numpy as np
-import pandas as pd
 import os
 import json
 from pathlib import Path
@@ -43,6 +42,14 @@ SETTINGS = {
             },
             {
                 "ImageType": 2,
+                "Width": 1280,
+                "Height": 720,
+                "FOV_Degrees": 90,
+                "AutoExposureSpeed": 100,
+                "MotionBlurAmount": 0
+            },
+            {
+                "ImageType": 3,
                 "Width": 1280,
                 "Height": 720,
                 "FOV_Degrees": 90,
@@ -88,7 +95,7 @@ class Camera_pose:
     
 # ============================================================
 
-def import_airsim_pose(csvfile_PATH): # airsim data from SM [X,Y,Z,Roll,Pitch,Yaw]
+def import_airsim_pose(csvfile_PATH) -> list: # airsim data from SM [X,Y,Z,Roll,Pitch,Yaw]
     cameras_pose = []
     with open(csvfile_PATH, 'r') as csv_f:
         rows = csv.reader(csv_f)
@@ -198,7 +205,8 @@ def output_depth_responses_to_yuv(savedir_PATH, name_responses, depth_responses,
         filename = f'{savedir_PATH}/{name_responses[response_idx]}'
         if response.pixels_as_float:
             response_float_data = response.image_data_float
-            response_float_data = 0.125/np.array(response_float_data)
+            response_float_data = 0.125/np.array(response_float_data) # for DisparityNormalized
+            # response_float_data = np.array(response_float_data)*100/255 # for DepthVis
             response_float_data = response_float_data.flatten()
             depth_16bit = (((1/response_float_data-1/zmax) /
                         (1/zmin-1/zmax)) * 65535)
@@ -227,8 +235,8 @@ def get_zmin_zmax(depth_response):
         @para responses: [disp, scene]
     '''
     response = depth_response.image_data_float
-    response = np.array(response)*100/255 # from disp to depth
-    # response = 0.125/np.array(response) # from disp to depth
+    response = 0.125/np.array(response) # from disp to depth for DisparityNormalized
+    # response = np.array(response)*100/255 # from disp to depth for DepthVis
     return response.min(), response.max()
 
 def generate_camera_para_json(cameras_pose, num_frames, zmin, zmax, contentName):
@@ -323,17 +331,19 @@ def capture_main(workdir_PATH: Path, csvfile_PATH: Path):
         print('Finish changing position')
         if CAPTURE_TEXTURE:
             if CAPTURE_DEPTH:
+                # use DisparityNormalized to capture depth data
                 responses = client.simGetImages([
                     airsim.ImageRequest('', airsim.ImageType.Scene, False, False),
-                    airsim.ImageRequest('', airsim.ImageType.DepthVis, True),
+                    airsim.ImageRequest('', airsim.ImageType.DisparityNormalized, True),
                     ])
+                # # use DepthVis to capture depth data
                 # responses = client.simGetImages([
                 #     airsim.ImageRequest('', airsim.ImageType.Scene, False, False),
-                #     airsim.ImageRequest('', airsim.ImageType.DisparityNormalized, True),
+                #     airsim.ImageRequest('', airsim.ImageType.DepthVis, True),
                 #     ])
                 texture_responses.append(responses[0])
                 depth_responses.append(responses[1])
-            else:
+            else: # only capture texture
                 responses = client.simGetImages([
                     airsim.ImageRequest('', airsim.ImageType.Scene, False, False),
                     ])
@@ -344,7 +354,7 @@ def capture_main(workdir_PATH: Path, csvfile_PATH: Path):
         end_time = time.time()
         print(end_time-start_time)
         client.simPause(False)
-    
+        
     # # dir to store yuv file
     # save_dir = Path(workdir_PATH,'capture_data',f'group{groupNum}')
     # save_dir.mkdir(parents=True, exist_ok=True)
@@ -413,7 +423,7 @@ def merge_gt(workdir_PATH: Path, poseNum: int, groupNum: int):
 # ============================================================
 
 def main():
-    all_workdir_PATH = Path('.').glob('idF5_slvrNSAbf_ds5_L6_k6_ch9_r1.0_thr0.5')
+    all_workdir_PATH = Path('.').glob('idF5_slvrNSAbf_ds5_L12_k12_ch9_r1.0_thr0.5')
     for workdir_PATH in all_workdir_PATH:
         print(workdir_PATH)
         for csvfile_PATH in Path(workdir_PATH).glob('sourceView_*'):
