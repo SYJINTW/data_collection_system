@@ -19,54 +19,55 @@ CAPTURE_DEPTH = True
 # ============================================================
 
 SETTINGS = {
-  "SeeDocsAt": "https://github.com/Microsoft/AirSim/blob/master/docs/settings.md",
-  "SettingsVersion": 1.2,
-  "SimMode": "ComputerVision",
-  "CameraDefaults": {
-    "CaptureSettings": [
-            {
-                "ImageType": 0,
-                "Width": 1280,
-                "Height": 720,
-                "FOV_Degrees": 90,
-                "AutoExposureSpeed": 100,
-                "MotionBlurAmount": 0
-            },
-            {
-                "ImageType": 1,
-                "Width": 1280,
-                "Height": 720,
-                "FOV_Degrees": 90,
-                "AutoExposureSpeed": 100,
-                "MotionBlurAmount": 0
-            },
-            {
-                "ImageType": 2,
-                "Width": 1280,
-                "Height": 720,
-                "FOV_Degrees": 90,
-                "AutoExposureSpeed": 100,
-                "MotionBlurAmount": 0
-            },
-            {
-                "ImageType": 3,
-                "Width": 1280,
-                "Height": 720,
-                "FOV_Degrees": 90,
-                "AutoExposureSpeed": 100,
-                "MotionBlurAmount": 0
-            },
-            {
-                "ImageType": 4,
-                "Width": 1280,
-                "Height": 720,
-                "FOV_Degrees": 90,
-                "AutoExposureSpeed": 100,
-                "MotionBlurAmount": 0
-            }
-        ]
-    },
-    "Recording": {
+	"SeeDocsAt": "https://github.com/Microsoft/AirSim/blob/master/docs/settings.md",
+	"SettingsVersion": 1.2,
+	"SimMode": "ComputerVision",
+	"ViewMode": "",
+	"CameraDefaults": {
+		"CaptureSettings": [
+			{
+				"ImageType": 0,
+				"Width": 640,
+				"Height": 360,
+				"FOV_Degrees": 90,
+				"AutoExposureSpeed": 100,
+				"MotionBlurAmount": 0
+			},
+			{
+				"ImageType": 1,
+				"Width": 640,
+				"Height": 360,
+				"FOV_Degrees": 90,
+				"AutoExposureSpeed": 100,
+				"MotionBlurAmount": 0
+			},
+			{
+				"ImageType": 2,
+				"Width": 640,
+				"Height": 360,
+				"FOV_Degrees": 90,
+				"AutoExposureSpeed": 100,
+				"MotionBlurAmount": 0
+			},
+			{
+				"ImageType": 3,
+				"Width": 640,
+				"Height": 360,
+				"FOV_Degrees": 90,
+				"AutoExposureSpeed": 100,
+				"MotionBlurAmount": 0
+			},
+			{
+				"ImageType": 4,
+				"Width": 640,
+				"Height": 360,
+				"FOV_Degrees": 90,
+				"AutoExposureSpeed": 100,
+				"MotionBlurAmount": 0
+			}
+		]
+	},
+	"Recording": {
         "RecordInterval": 2
     },
     "CameraDirector": {
@@ -354,10 +355,6 @@ def capture_main(workdir_PATH: Path, csvfile_PATH: Path):
         end_time = time.time()
         print(end_time-start_time)
         client.simPause(False)
-        
-    # # dir to store yuv file
-    # save_dir = Path(workdir_PATH,'capture_data',f'group{groupNum}')
-    # save_dir.mkdir(parents=True, exist_ok=True)
 
     output_texture_responses_to_yuv(savedir_PATH, name_responses, texture_responses)
     
