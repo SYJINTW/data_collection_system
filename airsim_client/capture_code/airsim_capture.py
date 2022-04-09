@@ -373,8 +373,8 @@ def capture_gt(workdir_PATH: Path, csvfile_PATH: Path):
     '''
 
     # create save dir
-    filename_split = csvfile_PATH.stem.split('_')
-    savedir_PATH = Path(workdir_PATH,'capture_GT',filename_split[0],filename_split[1])
+    filename_split = csvfile_PATH.stem.split('_') # pose0_group0_raw.csv
+    savedir_PATH = Path(workdir_PATH,'capture_GT')
     savedir_PATH.mkdir(parents=True, exist_ok=True)
 
     # read pose traces (where cameras should pose and rotate)
@@ -420,7 +420,7 @@ def merge_gt(workdir_PATH: Path, poseNum: int, groupNum: int):
 # ============================================================
 
 def main():
-    all_workdir_PATH = Path('.').glob('idF5_slvrNSAbf_ds5_L12_k12_ch9_r1.0_thr0.5')
+    all_workdir_PATH = Path('.').glob('idF5*')
     for workdir_PATH in all_workdir_PATH:
         print(workdir_PATH)
         for csvfile_PATH in Path(workdir_PATH).glob('sourceView_*'):
@@ -428,7 +428,7 @@ def main():
             capture_main(workdir_PATH, csvfile_PATH)
 
 def gt_main():
-    all_workdir_PATH = Path('.').glob('idF5_*')
+    all_workdir_PATH = Path('.').glob('idF5_16*')
     for workdir_PATH in all_workdir_PATH:
         print(workdir_PATH)
         for csvfile_PATH in Path(workdir_PATH,'pose_traces','raw_poses').glob('*_raw.csv'):
@@ -436,9 +436,9 @@ def gt_main():
             capture_gt(workdir_PATH, csvfile_PATH)
 
 if __name__ == '__main__':
-    # gt_main()
+    gt_main()
     # start_time = time.time()
-    main()
+    # main()
     # end_time = time.time()
     # print(end_time-start_time)
 
