@@ -1,3 +1,4 @@
+from tabnanny import filename_only
 import setup_path
 import airsim
 import time
@@ -119,6 +120,18 @@ def import_raw_pose(csvfile_PATH): # raw airsim data [X,Y,Z,Yaw,Pitch,Roll]
             cameras_pose.append(Camera_pose(f'v{pose_idx}', [row[0],row[1],row[2],row[3],row[4],row[5]]))
             pose_idx = pose_idx + 1
     return cameras_pose
+
+def import_pose_from_capture(csvfile_PATH): # raw airsim data [t,x,y,z,roll,pitch,yaw,valid]
+    cameras_pose = []
+    with open(csvfile_PATH, 'r') as csv_f:
+        rows = csv.reader(csv_f)
+        next(rows) # skip header
+        pose_idx = 0
+        for row in rows:
+            cameras_pose.append(Camera_pose(f'v{pose_idx}', [row[1],row[2],row[3],row[6],row[5],row[4]]))
+            pose_idx = pose_idx + 1
+    return cameras_pose
+
 
 def set_camera_pose_to_airsim(client, camera_pose):
     '''
@@ -373,12 +386,12 @@ def capture_gt(workdir_PATH: Path, csvfile_PATH: Path):
     '''
 
     # create save dir
-    filename_split = csvfile_PATH.stem.split('_') # pose0_group0_raw.csv
-    savedir_PATH = Path(workdir_PATH,'capture_GT')
+    filename = csvfile_PATH.stem # pose0.csv -> pose0
+    savedir_PATH = Path(workdir_PATH,'capture_GT',filename)
     savedir_PATH.mkdir(parents=True, exist_ok=True)
 
     # read pose traces (where cameras should pose and rotate)
-    pose_traces = import_raw_pose(csvfile_PATH)
+    pose_traces = import_pose_from_capture(csvfile_PATH)
     
     # connect to the AirSim simulator
     client = airsim.VehicleClient()
@@ -428,12 +441,12 @@ def main():
             capture_main(workdir_PATH, csvfile_PATH)
 
 def gt_main():
-    all_workdir_PATH = Path('.').glob('idF5_16*')
-    for workdir_PATH in all_workdir_PATH:
-        print(workdir_PATH)
-        for csvfile_PATH in Path(workdir_PATH,'pose_traces','raw_poses').glob('*_raw.csv'):
-            print(csvfile_PATH)
-            capture_gt(workdir_PATH, csvfile_PATH)
+    workdir_PATH = Path('GT')
+    print(workdir_PATH)
+    # for csvfile_PATH in Path(workdir_PATH).glob('pose*.csv'):
+    for csvfile_PATH in Path(workdir_PATH).glob('pose0.csv'):
+        print(csvfile_PATH)
+        capture_gt(workdir_PATH, csvfile_PATH)
 
 if __name__ == '__main__':
     gt_main()
