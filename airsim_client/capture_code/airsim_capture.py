@@ -92,8 +92,6 @@ class Camera_pose:
         self.name = _name
         self.position = [float(x) for x in _array[0:3]]
         self.rotation = [float(x) for x in _array[3:6]]
-        # print(self.position)
-        # print(self.rotation)
     
 # ============================================================
 
@@ -132,7 +130,6 @@ def import_pose_from_capture(csvfile_PATH): # raw airsim data [t,x,y,z,roll,pitc
             pose_idx = pose_idx + 1
     return cameras_pose
 
-
 def set_camera_pose_to_airsim(client, camera_pose):
     '''
     Change the position in airsim related to the starting point
@@ -161,7 +158,19 @@ def set_camera_pose_to_airsim(client, camera_pose):
         True
     )
     pose = client.simGetVehiclePose()
-    
+
+def convert_airsim_coordinate_to_MIV_coordinate(airsim_camera_pose):
+    MIV_camera_pose = Camera_pose()
+    # x, y, z
+    MIV_camera_pose.position = [
+        airsim_camera_pose.position[0], -airsim_camera_pose.position[1], -airsim_camera_pose.position[2]]
+    # yaw, pitch, roll
+    MIV_camera_pose.rotation = [
+        -airsim_camera_pose.rotation[0], -airsim_camera_pose.rotation[1], airsim_camera_pose.rotation[2]]
+    return MIV_camera_pose
+
+# ============================================================
+
 def output_texture_responses_to_yuv(savedir_PATH: Path, name_responses: list, tex_responses: list):
     '''
     This function will output the texture output file in yuv10le format.
@@ -171,17 +180,18 @@ def output_texture_responses_to_yuv(savedir_PATH: Path, name_responses: list, te
     
     for response_idx, response in enumerate(tex_responses):
         filename = f'{savedir_PATH}/{name_responses[response_idx]}'
-        if not response.pixels_as_float: # Scene
-            # airsim.write_file(os.path.normpath(f'{filename}_tex.png'),
-            #                 response.image_data_uint8)
-            # # convert Depth video into yuv420p16le (monochrome)
-            # os.system(
-            #     f"powershell ffmpeg -y \
-            #         -i {filename}_tex.png \
-            #         -pix_fmt yuv420p10le \
-            #         {filename}_texture_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p10le.yuv"
-            #     )
-            
+        if response.compress:
+            airsim.write_file(os.path.normpath(f'{filename}_tex.png'),
+                            response.image_data_uint8)
+            # convert Depth video into yuv420p16le (monochrome)
+            os.system(
+                f"powershell ffmpeg -y \
+                    -i {filename}_tex.png \
+                    -pix_fmt yuv420p10le \
+                    {filename}_texture_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p10le.yuv"
+                )
+
+        else: # Scene
             # save png
             # Get from https://github.com/microsoft/AirSim/blob/master/docs/image_apis.md#using-airsim-images-with-numpy
             # get numpy array
@@ -203,18 +213,6 @@ def output_texture_responses_to_yuv(savedir_PATH: Path, name_responses: list, te
                     -pix_fmt yuv420p10le \
                     {filename}_texture_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p10le.yuv"
                 )
-
-def cal_surface(v1, v2, v3):
-    vector1 = v1-v2
-    vector2 = v1-v3
-    n_vector = np.cross(vector1, vector2)
-    d = -np.dot(v1,n_vector)
-    return np.append(n_vector, d)
-
-def find_point_in_surface(surface_para, point, viewport):
-    line_vector = viewport - point
-    n_vector = np.array(surface_para[0], surface_para[1], surface_para[2])
-    k = -(np.dot(point, n_vector)+surface_para[3])/np.dot(line_vector, n_vector)
     
 def output_depth_responses_to_yuv(savedir_PATH, name_responses, depth_responses, zmin, zmax):
     '''
@@ -242,7 +240,9 @@ def output_depth_responses_to_yuv(savedir_PATH, name_responses, depth_responses,
             print(depth_16bit.dtype)
             with open(f"{filename}_depth_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p16le.yuv", mode='wb') as f:
                 yuv_frames.tofile(f)
-    
+
+# ============================================================
+
 def z_boundary(depth_responses):
     zmin = math.inf
     zmax = -math.inf
@@ -311,16 +311,6 @@ def generate_camera_para_json(cameras_pose, num_frames, zmin, zmax, contentName)
     camera_parameter["cameras"].append(viewport_parameter)
     return camera_parameter
 
-def convert_airsim_coordinate_to_MIV_coordinate(airsim_camera_pose):
-    MIV_camera_pose = Camera_pose()
-    # x, y, z
-    MIV_camera_pose.position = [
-        airsim_camera_pose.position[0], -airsim_camera_pose.position[1], -airsim_camera_pose.position[2]]
-    # yaw, pitch, roll
-    MIV_camera_pose.rotation = [
-        -airsim_camera_pose.rotation[0], -airsim_camera_pose.rotation[1], airsim_camera_pose.rotation[2]]
-    return MIV_camera_pose
-
 # ============================================================
 
 def capture_main(workdir_PATH: Path, csvfile_PATH: Path):
@@ -364,7 +354,7 @@ def capture_main(workdir_PATH: Path, csvfile_PATH: Path):
                 texture_responses.append(responses[1])
             else: # only capture texture
                 responses = client.simGetImages([
-                    airsim.ImageRequest('', airsim.ImageType.Scene, False, False),
+                    airsim.ImageRequest('front_center', airsim.ImageType.Scene, False, False),
                     ])
                 texture_responses.append(responses[0])
         else:
