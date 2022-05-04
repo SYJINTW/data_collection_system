@@ -14,7 +14,7 @@ from pathlib import Path
 # ============================================================
 
 CAPTURE_TEXTURE = True
-CAPTURE_DEPTH = True
+CAPTURE_DEPTH = False
 
 # setting.json setting for airsim server
 # ============================================================
@@ -428,7 +428,7 @@ def merge_gt(workdir_PATH: Path, poseNum: int, groupNum: int):
 # ============================================================
 
 def main():
-    all_workdir_PATH = Path('.')/'exp5'.glob('idF5*')
+    all_workdir_PATH = (Path('.')/'exp5').glob('idF5*')
     for workdir_PATH in all_workdir_PATH:
         print(workdir_PATH)
         for csvfile_PATH in Path(workdir_PATH).glob('sourceView_*'):
