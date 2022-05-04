@@ -172,27 +172,37 @@ def output_texture_responses_to_yuv(savedir_PATH: Path, name_responses: list, te
     for response_idx, response in enumerate(tex_responses):
         filename = f'{savedir_PATH}/{name_responses[response_idx]}'
         if not response.pixels_as_float: # Scene
-            # save png
-            # Get from https://github.com/microsoft/AirSim/blob/master/docs/image_apis.md#using-airsim-images-with-numpy
-            # get numpy array
-            img1d = np.fromstring(
-                response.image_data_uint8, dtype=np.uint8)  # get numpy array
-            print(img1d.shape)
-            # reshape array to 4 channel image array H X W X 4
-            img_rgb = img1d.reshape(response.height, response.width, 3)
-            # # original image is fliped vertically
-            # img_rgb = np.flipud(img_rgb)
-            # write to png 
-            airsim.write_png(os.path.normpath(f'{filename}_tex.png'), img_rgb)
-            # save png end
-
-            # turn png into yuv
+            airsim.write_file(os.path.normpath(f'{filename}_tex.png'),
+                            response.image_data_uint8)
+            # convert Depth video into yuv420p16le (monochrome)
             os.system(
                 f"powershell ffmpeg -y \
                     -i {filename}_tex.png \
                     -pix_fmt yuv420p10le \
                     {filename}_texture_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p10le.yuv"
                 )
+            
+            # # save png
+            # # Get from https://github.com/microsoft/AirSim/blob/master/docs/image_apis.md#using-airsim-images-with-numpy
+            # # get numpy array
+            # img1d = np.fromstring(
+            #     response.image_data_uint8, dtype=np.uint8)  # get numpy array
+            # print(img1d.shape)
+            # # reshape array to 4 channel image array H X W X 4
+            # img_rgb = img1d.reshape(response.height, response.width, 3)
+            # # # original image is fliped vertically
+            # # img_rgb = np.flipud(img_rgb)
+            # # write to png 
+            # airsim.write_png(os.path.normpath(f'{filename}_tex.png'), img_rgb)
+            # # save png end
+
+            # # turn png into yuv
+            # os.system(
+            #     f"powershell ffmpeg -y \
+            #         -i {filename}_tex.png \
+            #         -pix_fmt yuv420p10le \
+            #         {filename}_texture_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p10le.yuv"
+            #     )
 
 def cal_surface(v1, v2, v3):
     vector1 = v1-v2
@@ -347,16 +357,11 @@ def capture_main(workdir_PATH: Path, csvfile_PATH: Path):
             if CAPTURE_DEPTH:
                 # use DisparityNormalized to capture depth data
                 responses = client.simGetImages([
-                    airsim.ImageRequest('', airsim.ImageType.Scene, False, False),
-                    airsim.ImageRequest('', airsim.ImageType.DisparityNormalized, True),
+                    airsim.ImageRequest('front_center', airsim.ImageType.DisparityNormalized, True),
+                    airsim.ImageRequest('front_center', airsim.ImageType.Scene, False, False),
                     ])
-                # # use DepthVis to capture depth data
-                # responses = client.simGetImages([
-                #     airsim.ImageRequest('', airsim.ImageType.Scene, False, False),
-                #     airsim.ImageRequest('', airsim.ImageType.DepthVis, True),
-                #     ])
-                texture_responses.append(responses[0])
-                depth_responses.append(responses[1])
+                depth_responses.append(responses[0])
+                texture_responses.append(responses[1])
             else: # only capture texture
                 responses = client.simGetImages([
                     airsim.ImageRequest('', airsim.ImageType.Scene, False, False),
@@ -449,9 +454,9 @@ def gt_main():
         capture_gt(workdir_PATH, csvfile_PATH)
 
 if __name__ == '__main__':
-    gt_main()
+    # gt_main()
     # start_time = time.time()
-    # main()
+    main()
     # end_time = time.time()
     # print(end_time-start_time)
 
