@@ -141,6 +141,8 @@ def import_pose_from_capture(csvfile_PATH): # raw airsim data [t,x,y,z,roll,pitc
             pose_idx = pose_idx + 1
     return cameras_pose
 
+# ============================================================
+
 def set_camera_pose_to_airsim(client, camera_pose):
     '''
     Change the position in airsim related to the starting point
@@ -169,7 +171,9 @@ def set_camera_pose_to_airsim(client, camera_pose):
         True
     )
     pose = client.simGetVehiclePose()
-    
+
+# ============================================================
+     
 def output_texture_responses_to_yuv(savedir_PATH: Path, name_responses: list, tex_responses: list):
     '''
     This function will output the texture output file in yuv10le format.
@@ -290,7 +294,34 @@ def output_depth_responses_to_yuv(savedir_PATH, name_responses, depth_responses,
             print(depth_16bit.dtype)
             with open(f"{filename}_depth_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p16le.yuv", mode='wb') as f:
                 yuv_frames.tofile(f)
-  
+
+def output_depth_responses_to_yuv_frame_by_frame_zmin_zmax(savedir_PATH, name_responses, depth_responses, zmin_list, zmax_list):
+    '''
+    This function will output the depth output file in yuv16le format.
+    The depth information capture by airsim.ImageType.DisparityNormalized
+    cannot supply correct depth image for MIV.
+    So that we have to transform the depth information
+    from airsim to 16 bit for MIV type.
+    '''
+     
+    for response_idx, response in enumerate(depth_responses):
+        filename = f'{savedir_PATH}/{name_responses[response_idx]}'
+        if response.pixels_as_float:
+            response_float_data = response.image_data_float
+            response_float_data = 0.125/np.array(response_float_data) # for DisparityNormalized
+            # response_float_data = np.array(response_float_data)*100/255 # for DepthVis
+            response_float_data = response_float_data.flatten()
+            depth_16bit = (((1/response_float_data-1/zmax_list[response_idx]) /
+                        (1/zmin_list[response_idx]-1/zmax_list[response_idx])) * 65535)
+            depth_16bit = depth_16bit.astype(np.int16)
+            yuv_frames = np.append(depth_16bit, np.full(
+                int(len(depth_16bit)/2), 32768, dtype=np.int16))
+            print(f"Type {response.image_type}, size {len(response.image_data_float)}")
+            print(response.height, response.width)
+            print(depth_16bit.dtype)
+            with open(f"{filename}_depth_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p16le.yuv", mode='wb') as f:
+                yuv_frames.tofile(f)
+
 def z_boundary(depth_responses):
     zmin = math.inf
     zmax = -math.inf
@@ -300,6 +331,15 @@ def z_boundary(depth_responses):
         zmax = max(zmax, zmax_tmp)
         print(f'zmin {zmin}, zmax {zmax}')
     return zmin, zmax
+
+def z_boundary_frame_by_frame_zmin_zmax(depth_responses):
+    zmin_list = []
+    zmax_list = []
+    for response in depth_responses:
+        zmin_tmp, zmax_tmp = get_zmin_zmax(response)
+        zmin_list.append(zmin_tmp)
+        zmax_list.append(zmax_tmp)
+    return zmin_list, zmax_list
 
 def get_zmin_zmax(depth_response):
     '''
@@ -332,6 +372,55 @@ def generate_camera_para_json(cameras_pose, num_frames, zmin, zmax, contentName)
         camera["BitDepthDepth"] = 16
         camera["Name"] = camera_pose.name
         camera["Depth_range"] = [zmin, zmax]
+        camera["DepthColorSpace"] = "YUV420"
+        camera["ColorSpace"] = "YUV420"
+        MIV_camera_pose = convert_airsim_coordinate_to_MIV_coordinate(
+            camera_pose)
+        camera["Position"] = MIV_camera_pose.position
+        camera["Rotation"] = MIV_camera_pose.rotation
+        camera["Resolution"] = RESOLUTION
+        camera["Projection"] = "Perspective"
+        camera["HasInvalidDepth"] = False
+        camera["Depthmap"] = 1
+        camera["Background"] = 0
+        # F = w / (2 * tan(FOV/2))
+        camera["Focal"] = [
+            camera["Resolution"][0] / (2 * math.tan(90/2 * math.pi/180)), camera["Resolution"][0] / (2 * math.tan(90/2 * math.pi/180))]
+        # print(camera["Focal"])
+        # w / 2, h / 2
+        camera["Principle_point"] = [
+            camera["Resolution"][0]/2, camera["Resolution"][1]/2]
+        camera_parameter["cameras"].append(camera)
+    viewport_parameter = camera_parameter["cameras"][0].copy()
+    viewport_parameter["Name"] = "viewport"
+    viewport_parameter["Position"] = [0.0, 0.0, 0.0]
+    viewport_parameter["Rotation"] = [0.0, 0.0, 0.0]
+    viewport_parameter["HasInvalidDepth"] = True
+    camera_parameter["cameras"].append(viewport_parameter)
+    return camera_parameter
+
+def generate_camera_para_json_frame_by_frame_zmin_zmax(cameras_pose, num_frames, zmin_list, zmax_list, contentName):
+    '''
+    return json object
+    This function will generate a json file for MIV 
+    '''
+    camera_parameter = {}
+    camera_parameter['Version'] = '4.0'
+    camera_parameter["BoundingBox_center"] = [0, 0, 0]
+    camera_parameter["Fps"] = 30
+    camera_parameter["Content_name"] = contentName
+    camera_parameter["Frames_number"] = num_frames
+    camera_parameter["lengthsInMeters"] = True
+    camera_parameter["sourceCameraNames"] = [
+        camera_pose.name for camera_pose in cameras_pose]
+    camera_parameter["cameras"] = []
+    for i in range(len(cameras_pose)):
+        camera_pose = cameras_pose[i]
+        camera = {}
+        camera["BitDepthColor"] = 10
+        camera["BitDepthDepth"] = 16
+        camera["Name"] = camera_pose.name
+        camera["Depth_range"] = [zmin_list[i], zmax_list[i]]
         camera["DepthColorSpace"] = "YUV420"
         camera["ColorSpace"] = "YUV420"
         MIV_camera_pose = convert_airsim_coordinate_to_MIV_coordinate(
@@ -524,6 +613,67 @@ def capture_gt(workdir_PATH: Path, csvfile_PATH: Path):
         output_texture_responses_to_yuv_one_frame(savedir_PATH, pose_trace.name, responses[0])
         client.simPause(False)
 
+def capture_sv(workdir_PATH: Path, csvfile_PATH: Path):
+    '''
+    workdir_PATH:
+    poseNum:
+    groupNum:
+    '''
+
+    # create save dir
+    filename = csvfile_PATH.stem # pose0.csv -> pose0
+    savedir_PATH = Path(workdir_PATH,'capture_SV',filename)
+    savedir_PATH.mkdir(parents=True, exist_ok=True)
+
+    # read pose traces (where cameras should pose and rotate)
+    pose_traces = import_pose_from_capture(csvfile_PATH)
+    
+    # connect to the AirSim simulator
+    client = airsim.VehicleClient()
+    client.confirmConnection()
+
+    name_responses = []
+    texture_responses = []
+    depth_responses = []
+    
+    for pose_trace in pose_traces:
+        time.sleep(1)
+        client.simPause(True)
+        start_time = time.time()
+        name_responses.append(pose_trace.name)
+        set_camera_pose_to_airsim(client, pose_trace) # change camera position
+        # time.sleep(3)
+        print('Finish changing position')
+        if CAPTURE_TEXTURE:
+            if CAPTURE_DEPTH:
+                # use DisparityNormalized to capture depth data
+                responses = client.simGetImages([
+                    airsim.ImageRequest('front_center', airsim.ImageType.DisparityNormalized, True),
+                    airsim.ImageRequest('front_center', airsim.ImageType.Scene, False, False),
+                    ])
+                depth_responses.append(responses[0])
+                texture_responses.append(responses[1])
+            else: # only capture texture
+                responses = client.simGetImages([
+                    airsim.ImageRequest('', airsim.ImageType.Scene, False, False),
+                    ])
+                texture_responses.append(responses[0])
+        else:
+            continue
+        print('Retrieved images: %d' % len(responses))
+        end_time = time.time()
+        print(end_time-start_time)
+        client.simPause(False)
+
+    output_texture_responses_to_yuv(savedir_PATH, name_responses, texture_responses)
+    
+    if CAPTURE_DEPTH:
+        zmin_list, zmax_list = z_boundary_frame_by_frame_zmin_zmax(depth_responses)
+        output_depth_responses_to_yuv_frame_by_frame_zmin_zmax(savedir_PATH, name_responses, depth_responses, zmin_list, zmax_list)
+        camera_parameter = generate_camera_para_json_frame_by_frame_zmin_zmax(pose_traces, 1, zmin_list, zmax_list, workdir_PATH.stem)
+        with open(f'{savedir_PATH}/{workdir_PATH.stem}.json', 'w') as f:
+            json.dump(camera_parameter, f)
+
 # ============================================================
 
 def sourceView_main():
@@ -550,8 +700,16 @@ def gt_main():
         print(csvfile_PATH)
         capture_gt(workdir_PATH, csvfile_PATH)
 
+def capture_all_poses():
+    workdir_PATH = Path('sourceViewData')
+    print(workdir_PATH)
+    for csvfile_PATH in Path(workdir_PATH).glob('poseTest.csv'):
+        print(csvfile_PATH)
+        capture_sv(workdir_PATH, csvfile_PATH)
+
 if __name__ == '__main__':
     # gt_main()
     # sourceView_main()
-    sampleOutput_main()
+    # sampleOutput_main()
+    capture_all_poses()
     
