@@ -465,7 +465,7 @@ def gt_main():
         capture_gt(workdir_PATH, csvfile_PATH)
 
 if __name__ == '__main__':
-    # gt_main()
-    main()
+    gt_main()
+    # main()
     
 

@@ -1,4 +1,3 @@
-from tabnanny import filename_only
 import setup_path
 import airsim
 import time
@@ -14,7 +13,7 @@ from pathlib import Path
 # ============================================================
 
 CAPTURE_TEXTURE = True
-CAPTURE_DEPTH = False
+CAPTURE_DEPTH = True
 
 # setting.json setting for airsim server
 # ============================================================
@@ -95,11 +94,23 @@ class Camera_pose:
     
 # ============================================================
 
-def import_airsim_pose(csvfile_PATH) -> list: # airsim data from SM [X,Y,Z,Roll,Pitch,Yaw]
+def import_airsim_pose_skip_header(csvfile_PATH) -> list: # airsim data from SM [X,Y,Z,Roll,Pitch,Yaw]
     cameras_pose = []
     with open(csvfile_PATH, 'r') as csv_f:
         rows = csv.reader(csv_f)
         next(rows) # skip header
+        pose_idx = 0
+        for row in rows:
+            row = row[0].split()
+            if not (float(row[0]) == 0 and float(row[1]) == 0 and float(row[2]) == 0):  
+                cameras_pose.append(Camera_pose(f'v{pose_idx}', [row[0],row[1],row[2],row[5],row[4],row[3]]))
+                pose_idx = pose_idx + 1
+    return cameras_pose
+
+def import_airsim_pose(csvfile_PATH) -> list: # airsim data from SM [X,Y,Z,Roll,Pitch,Yaw]
+    cameras_pose = []
+    with open(csvfile_PATH, 'r') as csv_f:
+        rows = csv.reader(csv_f)
         pose_idx = 0
         for row in rows:
             row = row[0].split()
@@ -158,19 +169,7 @@ def set_camera_pose_to_airsim(client, camera_pose):
         True
     )
     pose = client.simGetVehiclePose()
-
-def convert_airsim_coordinate_to_MIV_coordinate(airsim_camera_pose):
-    MIV_camera_pose = Camera_pose()
-    # x, y, z
-    MIV_camera_pose.position = [
-        airsim_camera_pose.position[0], -airsim_camera_pose.position[1], -airsim_camera_pose.position[2]]
-    # yaw, pitch, roll
-    MIV_camera_pose.rotation = [
-        -airsim_camera_pose.rotation[0], -airsim_camera_pose.rotation[1], airsim_camera_pose.rotation[2]]
-    return MIV_camera_pose
-
-# ============================================================
-
+    
 def output_texture_responses_to_yuv(savedir_PATH: Path, name_responses: list, tex_responses: list):
     '''
     This function will output the texture output file in yuv10le format.
@@ -180,18 +179,17 @@ def output_texture_responses_to_yuv(savedir_PATH: Path, name_responses: list, te
     
     for response_idx, response in enumerate(tex_responses):
         filename = f'{savedir_PATH}/{name_responses[response_idx]}'
-        if response.compress:
-            airsim.write_file(os.path.normpath(f'{filename}_tex.png'),
-                            response.image_data_uint8)
-            # convert Depth video into yuv420p16le (monochrome)
-            os.system(
-                f"powershell ffmpeg -y \
-                    -i {filename}_tex.png \
-                    -pix_fmt yuv420p10le \
-                    {filename}_texture_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p10le.yuv"
-                )
-
-        else: # Scene
+        if not response.pixels_as_float: # Scene
+            # airsim.write_file(os.path.normpath(f'{filename}_tex.png'),
+            #                 response.image_data_uint8)
+            # # convert Depth video into yuv420p16le (monochrome)
+            # os.system(
+            #     f"powershell ffmpeg -y \
+            #         -i {filename}_tex.png \
+            #         -pix_fmt yuv420p10le \
+            #         {filename}_texture_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p10le.yuv"
+            #     )
+            
             # save png
             # Get from https://github.com/microsoft/AirSim/blob/master/docs/image_apis.md#using-airsim-images-with-numpy
             # get numpy array
@@ -213,6 +211,58 @@ def output_texture_responses_to_yuv(savedir_PATH: Path, name_responses: list, te
                     -pix_fmt yuv420p10le \
                     {filename}_texture_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p10le.yuv"
                 )
+
+def output_texture_responses_to_yuv_one_frame(savedir_PATH: Path, name_response: str, tex_response: str):
+    '''
+    This function will output the texture output file in yuv10le format.
+    '''
+    
+    filename = f'{savedir_PATH}/{name_response}'
+    if tex_response.compress:
+        airsim.write_file(os.path.normpath(f'{filename}_tex.png'),
+                        tex_response.image_data_uint8)
+        # convert Depth video into yuv420p16le (monochrome)
+        os.system(
+            f"powershell ffmpeg -y \
+                -i {filename}_tex.png \
+                -pix_fmt yuv420p10le \
+                {filename}_texture_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p10le.yuv"
+            )
+
+    else: # Scene
+        # save png
+        # Get from https://github.com/microsoft/AirSim/blob/master/docs/image_apis.md#using-airsim-images-with-numpy
+        # get numpy array
+        img1d = np.fromstring(
+            tex_response.image_data_uint8, dtype=np.uint8)  # get numpy array
+        # print(img1d.shape)
+        # reshape array to 4 channel image array H X W X 4
+        img_rgb = img1d.reshape(tex_response.height, tex_response.width, 3)
+        # # original image is fliped vertically
+        # img_rgb = np.flipud(img_rgb)
+        # write to png 
+        airsim.write_png(os.path.normpath(f'{filename}_tex.png'), img_rgb)
+        # save png end
+
+        # turn png into yuv
+        os.system(
+            f"powershell ffmpeg -y \
+                -i {filename}_tex.png \
+                -pix_fmt yuv420p10le \
+                {filename}_texture_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p10le.yuv"
+            )
+
+def cal_surface(v1, v2, v3):
+    vector1 = v1-v2
+    vector2 = v1-v3
+    n_vector = np.cross(vector1, vector2)
+    d = -np.dot(v1,n_vector)
+    return np.append(n_vector, d)
+
+def find_point_in_surface(surface_para, point, viewport):
+    line_vector = viewport - point
+    n_vector = np.array(surface_para[0], surface_para[1], surface_para[2])
+    k = -(np.dot(point, n_vector)+surface_para[3])/np.dot(line_vector, n_vector)
     
 def output_depth_responses_to_yuv(savedir_PATH, name_responses, depth_responses, zmin, zmax):
     '''
@@ -240,9 +290,7 @@ def output_depth_responses_to_yuv(savedir_PATH, name_responses, depth_responses,
             print(depth_16bit.dtype)
             with open(f"{filename}_depth_{RESOLUTION[0]}x{RESOLUTION[1]}_yuv420p16le.yuv", mode='wb') as f:
                 yuv_frames.tofile(f)
-
-# ============================================================
-
+    
 def z_boundary(depth_responses):
     zmin = math.inf
     zmax = -math.inf
@@ -311,6 +359,16 @@ def generate_camera_para_json(cameras_pose, num_frames, zmin, zmax, contentName)
     camera_parameter["cameras"].append(viewport_parameter)
     return camera_parameter
 
+def convert_airsim_coordinate_to_MIV_coordinate(airsim_camera_pose):
+    MIV_camera_pose = Camera_pose()
+    # x, y, z
+    MIV_camera_pose.position = [
+        airsim_camera_pose.position[0], -airsim_camera_pose.position[1], -airsim_camera_pose.position[2]]
+    # yaw, pitch, roll
+    MIV_camera_pose.rotation = [
+        -airsim_camera_pose.rotation[0], -airsim_camera_pose.rotation[1], airsim_camera_pose.rotation[2]]
+    return MIV_camera_pose
+
 # ============================================================
 
 def capture_main(workdir_PATH: Path, csvfile_PATH: Path):
@@ -321,6 +379,67 @@ def capture_main(workdir_PATH: Path, csvfile_PATH: Path):
 
     # create save dir
     groupNum = csvfile_PATH.stem.split('_')[1]
+    savedir_PATH = Path(workdir_PATH,'capture_SV',f'group{groupNum}')
+    savedir_PATH.mkdir(parents=True, exist_ok=True)
+
+    # read pose traces (where cameras should pose and rotate)
+
+    pose_traces = import_airsim_pose_skip_header(csvfile_PATH)
+    
+    # connect to the AirSim simulator
+    client = airsim.VehicleClient()
+    client.confirmConnection()
+
+    name_responses = []
+    texture_responses = []
+    depth_responses = []
+    
+    for pose_trace in pose_traces:
+        time.sleep(1)
+        client.simPause(True)
+        start_time = time.time()
+        name_responses.append(pose_trace.name)
+        set_camera_pose_to_airsim(client, pose_trace) # change camera position
+        # time.sleep(3)
+        print('Finish changing position')
+        if CAPTURE_TEXTURE:
+            if CAPTURE_DEPTH:
+                # use DisparityNormalized to capture depth data
+                responses = client.simGetImages([
+                    airsim.ImageRequest('front_center', airsim.ImageType.DisparityNormalized, True),
+                    airsim.ImageRequest('front_center', airsim.ImageType.Scene, False, False),
+                    ])
+                depth_responses.append(responses[0])
+                texture_responses.append(responses[1])
+            else: # only capture texture
+                responses = client.simGetImages([
+                    airsim.ImageRequest('', airsim.ImageType.Scene, False, False),
+                    ])
+                texture_responses.append(responses[0])
+        else:
+            continue
+        print('Retrieved images: %d' % len(responses))
+        end_time = time.time()
+        print(end_time-start_time)
+        client.simPause(False)
+
+    output_texture_responses_to_yuv(savedir_PATH, name_responses, texture_responses)
+    
+    if CAPTURE_DEPTH:
+        zmin, zmax = z_boundary(depth_responses)
+        output_depth_responses_to_yuv(savedir_PATH, name_responses, depth_responses, zmin, zmax)
+        camera_parameter = generate_camera_para_json(pose_traces, 1, zmin, zmax, workdir_PATH.stem)
+        with open(f'{savedir_PATH}/group{groupNum}.json', 'w') as f:
+            json.dump(camera_parameter, f)
+
+def capture_sampleOutput_main(workdir_PATH: Path, csvfile_PATH: Path):
+    '''
+    workdir_PATH:
+    csvfile_Path:
+    '''
+
+    # create save dir
+    groupNum = csvfile_PATH.stem.split('samplerOutput_')[1]
     savedir_PATH = Path(workdir_PATH,'capture_SV',f'group{groupNum}')
     savedir_PATH.mkdir(parents=True, exist_ok=True)
 
@@ -342,6 +461,7 @@ def capture_main(workdir_PATH: Path, csvfile_PATH: Path):
         start_time = time.time()
         name_responses.append(pose_trace.name)
         set_camera_pose_to_airsim(client, pose_trace) # change camera position
+        # time.sleep(3)
         print('Finish changing position')
         if CAPTURE_TEXTURE:
             if CAPTURE_DEPTH:
@@ -354,7 +474,7 @@ def capture_main(workdir_PATH: Path, csvfile_PATH: Path):
                 texture_responses.append(responses[1])
             else: # only capture texture
                 responses = client.simGetImages([
-                    airsim.ImageRequest('front_center', airsim.ImageType.Scene, False, False),
+                    airsim.ImageRequest('', airsim.ImageType.Scene, False, False),
                     ])
                 texture_responses.append(responses[0])
         else:
@@ -392,59 +512,46 @@ def capture_gt(workdir_PATH: Path, csvfile_PATH: Path):
     client = airsim.VehicleClient()
     client.confirmConnection()
 
-    name_responses = []
-    texture_responses = []
-    
     for pose_trace in pose_traces:
-        name_responses.append(pose_trace.name)
         set_camera_pose_to_airsim(client, pose_trace) # change camera position
         time.sleep(1)
         client.simPause(True)
         print('Finish changing position')
         responses = client.simGetImages([
-            airsim.ImageRequest('', airsim.ImageType.Scene, False, False),
+            airsim.ImageRequest('front_center', airsim.ImageType.Scene, False, False),
             ])
-        texture_responses.append(responses[0])
         print('Retrieved images: %d' % len(responses))
+        output_texture_responses_to_yuv_one_frame(savedir_PATH, pose_trace.name, responses[0])
         client.simPause(False)
-    
-    output_texture_responses_to_yuv(savedir_PATH, name_responses, texture_responses)
-
-def merge_gt(workdir_PATH: Path, poseNum: int, groupNum: int):
-    
-    yuvfile_PATH = Path(workdir_PATH,'ground_truth',f'pose{poseNum}',f'group{groupNum}')
-    
-    save_PATH = Path(workdir_PATH,'ground_truth')
-    
-    all_gt_yuv = yuvfile_PATH.glob('*_texture_1280x720_yuv420p10le.yuv')
-    gt_num = len([i.stem for i in all_gt_yuv])
-    
-    cat_list = ''
-    for idx in range(gt_num):
-        cat_list = cat_list + f"file v{idx}_texture_1280x720_yuv420p10le.yuv\n"
-    with open(f'{yuvfile_PATH}\merge.txt', 'w') as f:
-        f.write(cat_list)
 
 # ============================================================
 
-def main():
-    all_workdir_PATH = (Path('.')/'exp5').glob('idF5*')
+def sourceView_main():
+    all_workdir_PATH = (Path('.')/'expTesting').glob('idF5_*_0_slvr*')
     for workdir_PATH in all_workdir_PATH:
         print(workdir_PATH)
         for csvfile_PATH in Path(workdir_PATH).glob('sourceView_*'):
             print(csvfile_PATH)
             capture_main(workdir_PATH, csvfile_PATH)
 
+def sampleOutput_main():
+    all_workdir_PATH = (Path('.')/'expTesting').glob('idF5_*_0_slvr*')
+    for workdir_PATH in all_workdir_PATH:
+        print(workdir_PATH)
+        for csvfile_PATH in Path(workdir_PATH).glob('samplerOutput_*'):
+            print(csvfile_PATH)
+            capture_sampleOutput_main(workdir_PATH, csvfile_PATH)
+
 def gt_main():
     workdir_PATH = Path('GT')
     print(workdir_PATH)
-    # for csvfile_PATH in Path(workdir_PATH).glob('pose*.csv'):
-    for csvfile_PATH in Path(workdir_PATH).glob('pose0.csv'):
+    for csvfile_PATH in Path(workdir_PATH).glob('pose8.csv'):
+    # for csvfile_PATH in Path(workdir_PATH).glob('pose2.csv'):
         print(csvfile_PATH)
         capture_gt(workdir_PATH, csvfile_PATH)
 
 if __name__ == '__main__':
     # gt_main()
-    main()
+    # sourceView_main()
+    sampleOutput_main()
     
-

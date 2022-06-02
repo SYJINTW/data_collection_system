@@ -1,1 +1,0 @@
-{"downsample": 2, "LSize": 16, "kmax": 3, "chunkSize": 32, "rr": 1.0, "objfile_PATH": "my_four_bunny_mesh_cal_centered_scaled_500", "threshold_coverage": 0.7, "numSamplesPerWindow": 30, "csvfile_PATH_list": "exp_5F_16users", "solverName": "NSA2Greedy", "id": "F5_16users"}
